@@ -986,49 +986,6 @@ export default function AdminTrackingHistory() {
               </MapContainer>
             </div>
 
-            {/* Selected Shift KM Inspection & Action Bar */}
-            {selectedSession && (
-              <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 text-white p-4.5 rounded-2xl shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                <div className="flex items-center gap-3.5">
-                  <div className="w-11 h-11 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center font-black shrink-0">
-                    <Gauge className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400">Shift Distance Traveled</span>
-                      {selectedSession.manualDistanceAdded > 0 && (
-                        <span className="text-[10px] font-black text-amber-300 bg-amber-500/20 border border-amber-400/40 px-2 py-0.5 rounded-md">
-                          +{selectedSession.manualDistanceAdded} KM Manual Credit
-                        </span>
-                      )}
-                    </div>
-                    <div className="text-2xl font-black text-emerald-400 mt-0.5">
-                      {(selectedSession.totalDistance || 0).toFixed(2)} <span className="text-sm font-bold text-slate-300">KM</span>
-                      <span className="text-xs font-semibold text-slate-400 ml-2">
-                        ({selectedSession.employee?.name || 'Employee'})
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2 w-full sm:w-auto">
-                  <button
-                    onClick={() => openAdjustModal(selectedSession)}
-                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4.5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-black text-xs shadow-md shadow-emerald-500/20 transition active:scale-95 cursor-pointer"
-                  >
-                    <Plus className="w-4 h-4" />
-                    <span>Adjust / Give Extra KM</span>
-                  </button>
-                  <button
-                    onClick={exportToCSV}
-                    className="p-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl transition cursor-pointer border border-slate-700"
-                    title="Download Shift CSV"
-                  >
-                    <Download className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            )}
 
             {/* Detailed Timeline Breakdown */}
             {selectedSession && (

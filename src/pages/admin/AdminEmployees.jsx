@@ -39,6 +39,8 @@ import {
   Home,
   User,
   CreditCard,
+  Edit3,
+  Lock,
 } from 'lucide-react';
 import { API } from '../../services/api.service';
 import toast from 'react-hot-toast';
@@ -116,6 +118,23 @@ export default function AdminEmployees() {
   const [empToDelete, setEmpToDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
   const [blockingId, setBlockingId] = useState(null);
+
+  // Edit Employee State
+  const [empToEdit, setEmpToEdit] = useState(null);
+  const [editFormData, setEditFormData] = useState({
+    name: '',
+    phone: '',
+    email: '',
+    department: 'Field Services',
+    designation: 'Field Executive',
+    managerId: '',
+    password: '',
+    salary: 15000,
+    TA: 2.5,
+    DA: 0,
+    allocatedArea: 'Default Zone',
+  });
+  const [updatingEmp, setUpdatingEmp] = useState(false);
 
   // Bulk & Quick Manager Assign State
   const [bulkManagerId, setBulkManagerId] = useState('');
@@ -355,6 +374,59 @@ export default function AdminEmployees() {
       toast.error(err.response?.data?.message || 'Failed to update employee block status');
     } finally {
       setBlockingId(null);
+    }
+  };
+
+  const handleOpenEditModal = (emp) => {
+    setEmpToEdit(emp);
+    const assignedMgrIds = (emp.managers || []).map((m) => m._id || m);
+    if (assignedMgrIds.length === 0 && (emp.manager || emp.managerId)) {
+      const pId = emp.manager?._id || emp.managerId || emp.manager;
+      if (pId) assignedMgrIds.push(pId);
+    }
+
+    setEditFormData({
+      name: emp.name || '',
+      phone: emp.phone || '',
+      email: emp.email || '',
+      department: emp.department || 'Field Services',
+      designation: emp.designation || 'Field Executive',
+      managerId: assignedMgrIds[0] || '',
+      managers: assignedMgrIds,
+      password: '',
+      salary: emp.salary || 15000,
+      TA: emp.TA || 2.5,
+      DA: emp.DA || 0,
+      allocatedArea: emp.allocatedArea || 'Default Zone',
+      emergencyContact: {
+        name: emp.emergencyContact?.name || '',
+        phone: emp.emergencyContact?.phone || '',
+        relation: emp.emergencyContact?.relation || '',
+      },
+      address: {
+        street: emp.address?.street || '',
+        city: emp.address?.city || '',
+        state: emp.address?.state || '',
+        pincode: emp.address?.pincode || '',
+      },
+    });
+  };
+
+  const handleUpdateEmployee = async (e) => {
+    e.preventDefault();
+    if (!empToEdit) return;
+    try {
+      setUpdatingEmp(true);
+      const res = await API.put(`/employees/${empToEdit._id}`, editFormData);
+      if (res.data?.success) {
+        toast.success(`🎉 "${editFormData.name}" updated successfully in database!`);
+        setEmpToEdit(null);
+        fetchEmployeesData();
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Failed to update employee details');
+    } finally {
+      setUpdatingEmp(false);
     }
   };
 
@@ -660,20 +732,30 @@ export default function AdminEmployees() {
                           <div
                             onClick={() => setEditingManagerEmpId(emp._id)}
                             className="group/mgr flex items-center gap-2 cursor-pointer hover:bg-slate-100 p-1.5 rounded-xl transition-all"
-                            title="Click to assign or change manager"
+                            title="Click to change primary manager"
                           >
                             <Avatar
-                              src={emp.manager?.avatar}
-                              name={emp.manager?.name || emp.managerName || 'Unassigned'}
+                              src={emp.managers?.[0]?.avatar || emp.manager?.avatar}
+                              name={emp.managers?.[0]?.name || emp.manager?.name || 'Unassigned'}
                               size="xs"
                             />
                             <div>
                               <span className="font-semibold text-slate-900 block leading-tight group-hover/mgr:text-blue-600">
-                                {emp.manager?.name || emp.managerName || 'Assign Manager'}
+                                {emp.managers && emp.managers.length > 0
+                                  ? emp.managers.length > 1
+                                    ? `${emp.managers[0].name} +${emp.managers.length - 1} more`
+                                    : emp.managers[0].name
+                                  : emp.manager?.name || emp.managerName || 'Unassigned'}
                               </span>
-                              <span className="text-[10px] text-slate-400 block">
-                                {emp.manager?.department || (emp.manager ? 'Manager' : 'Click to assign')}
-                              </span>
+                              {emp.managers && emp.managers.length > 1 ? (
+                                <span className="inline-block px-1.5 py-0.5 mt-0.5 text-[9px] font-extrabold bg-blue-100 text-blue-800 rounded-full border border-blue-200">
+                                  {emp.managers.length} Managers Assigned
+                                </span>
+                              ) : (
+                                <span className="text-[10px] text-slate-400 block">
+                                  {emp.manager?.department || (emp.manager ? 'Manager' : 'Unassigned')}
+                                </span>
+                              )}
                             </div>
                           </div>
                         )}
@@ -738,13 +820,22 @@ export default function AdminEmployees() {
                           </button>
 
                           <button
+                            onClick={() => handleOpenEditModal(emp)}
+                            title="Edit Employee Details & Salary"
+                            className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg transition"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                            Edit
+                          </button>
+
+                          <button
                             onClick={() => handleToggleBlock(emp)}
                             disabled={blockingId === emp._id}
                             title={emp.isBlocked ? 'Unblock Employee Account' : 'Block Employee Account'}
                             className={`p-1.5 text-[11px] rounded-lg border transition ${
                               emp.isBlocked
                                 ? 'text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border-emerald-200'
-                                : 'text-amber-700 bg-amber-50 hover:bg-amber-100 border-amber-200'
+                                : 'text-slate-600 bg-slate-50 hover:bg-slate-100 border-slate-200'
                             }`}
                           >
                             {blockingId === emp._id ? (
@@ -992,6 +1083,47 @@ export default function AdminEmployees() {
                       </div>
                     </div>
 
+                    {/* Assigned Managers Section */}
+                    <div className="bg-blue-50/70 p-4 rounded-2xl border border-blue-100 space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <h4 className="font-bold text-slate-900 uppercase text-[11px] tracking-wider text-blue-700 flex items-center gap-1.5">
+                          <UserCheck className="w-4 h-4 text-blue-600" />
+                          Assigned Managers ({selectedEmp.managers?.length || (selectedEmp.manager ? 1 : 0)})
+                        </h4>
+                        {(selectedEmp.managers?.length || 0) > 1 && (
+                          <span className="px-2.5 py-0.5 text-[10px] bg-blue-600 text-white font-black rounded-full shadow-xs">
+                            Multi-Manager Active ({selectedEmp.managers.length} Managers)
+                          </span>
+                        )}
+                      </div>
+
+                      {selectedEmp.managers && selectedEmp.managers.length > 0 ? (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                          {selectedEmp.managers.map((m) => (
+                            <div key={m._id || m} className="flex items-center gap-3 p-2.5 bg-white rounded-xl border border-blue-200 shadow-2xs">
+                              <Avatar src={m.avatar} name={m.name || 'Manager'} size="sm" />
+                              <div className="min-w-0 flex-1">
+                                <div className="font-bold text-slate-900 truncate text-xs">{m.name}</div>
+                                <div className="text-[10px] text-slate-500 truncate">{m.department || 'Management'} {m.phone ? `• ${m.phone}` : ''}</div>
+                                {m.email && <div className="text-[9px] text-slate-400 truncate">{m.email}</div>}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : selectedEmp.manager ? (
+                        <div className="flex items-center gap-3 p-2.5 bg-white rounded-xl border border-blue-200 shadow-2xs">
+                          <Avatar src={selectedEmp.manager?.avatar} name={selectedEmp.manager?.name || 'Manager'} size="sm" />
+                          <div>
+                            <div className="font-bold text-slate-900 text-xs">{selectedEmp.manager?.name}</div>
+                            <div className="text-[10px] text-slate-500">{selectedEmp.manager?.department || 'Management'}</div>
+                            {selectedEmp.manager?.email && <div className="text-[9px] text-slate-400">{selectedEmp.manager.email}</div>}
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="text-xs text-slate-400 italic">No manager assigned yet.</p>
+                      )}
+                    </div>
+
                     {/* Section 1: Contact & Employment */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-100">
                       <div className="space-y-2.5">
@@ -1023,7 +1155,7 @@ export default function AdminEmployees() {
                         <div className="flex items-center gap-2 text-slate-600">
                           <User className="w-4 h-4 text-slate-400 flex-shrink-0" />
                           <div className="flex items-center gap-2 flex-1">
-                            <span>Manager:</span>
+                            <span>Primary Manager:</span>
                             <select
                               value={selectedEmp.manager?._id || selectedEmp.managerId || selectedEmp.manager || ''}
                               onChange={(e) => handleQuickAssignManager(selectedEmp._id, e.target.value)}
@@ -1223,6 +1355,327 @@ export default function AdminEmployees() {
             >
               Clear Selection
             </button>
+          </div>
+        )}
+
+        {/* ========================================================================= */}
+        {/* EDIT EMPLOYEE MODAL (SAVED TO DB)                                         */}
+        {/* ========================================================================= */}
+        {empToEdit && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-in fade-in">
+            <div className="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl space-y-4 border border-slate-200">
+              <div className="flex items-center justify-between border-b pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold">
+                    <Edit3 className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-slate-900">Edit Employee: {empToEdit.name}</h3>
+                    <p className="text-xs text-slate-500">Update employee profile, credentials, salary, and zone in database.</p>
+                  </div>
+                </div>
+                <button onClick={() => setEmpToEdit(null)} className="text-slate-400 hover:text-slate-600">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <form onSubmit={handleUpdateEmployee} className="space-y-4 text-xs">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">Full Name</label>
+                    <input
+                      type="text"
+                      required
+                      value={editFormData.name}
+                      onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
+                      className="w-full p-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">Phone Number</label>
+                    <input
+                      type="text"
+                      required
+                      value={editFormData.phone}
+                      onChange={(e) => setEditFormData({ ...editFormData, phone: e.target.value })}
+                      className="w-full p-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">Email Address</label>
+                    <input
+                      type="email"
+                      required
+                      value={editFormData.email}
+                      onChange={(e) => setEditFormData({ ...editFormData, email: e.target.value })}
+                      className="w-full p-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">New Password (leave blank if unchanged)</label>
+                    <input
+                      type="password"
+                      placeholder="••••••••"
+                      value={editFormData.password}
+                      onChange={(e) => setEditFormData({ ...editFormData, password: e.target.value })}
+                      className="w-full p-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">Department</label>
+                    <input
+                      type="text"
+                      value={editFormData.department}
+                      onChange={(e) => setEditFormData({ ...editFormData, department: e.target.value })}
+                      className="w-full p-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">Designation</label>
+                    <input
+                      type="text"
+                      value={editFormData.designation}
+                      onChange={(e) => setEditFormData({ ...editFormData, designation: e.target.value })}
+                      className="w-full p-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+
+                {/* Assign Multiple Managers */}
+                <div className="bg-blue-50/60 p-3 rounded-xl border border-blue-200/70 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="font-bold text-slate-800 text-[11px] uppercase tracking-wider text-blue-700">
+                      Assign Managers (Multi-Manager Access)
+                    </label>
+                    <span className="text-[10px] font-bold text-blue-600 bg-white px-2 py-0.5 rounded-md border border-blue-200">
+                      {editFormData.managers?.length || 0} Selected
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 max-h-36 overflow-y-auto pr-1">
+                    {managersList.map((m) => {
+                      const isChecked = (editFormData.managers || []).includes(m._id);
+                      return (
+                        <label
+                          key={m._id}
+                          className={`flex items-center gap-2 p-2 rounded-lg text-xs font-semibold cursor-pointer border transition ${
+                            isChecked
+                              ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
+                              : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={(e) => {
+                              const current = editFormData.managers || [];
+                              const updated = e.target.checked
+                                ? [...current, m._id]
+                                : current.filter((id) => id !== m._id);
+                              setEditFormData({
+                                ...editFormData,
+                                managers: updated,
+                                managerId: updated[0] || '',
+                              });
+                            }}
+                            className="hidden"
+                          />
+                          <Avatar src={m.avatar} name={m.name} size="xs" />
+                          <span className="truncate">{m.name}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">Monthly Salary (₹)</label>
+                    <input
+                      type="number"
+                      value={editFormData.salary}
+                      onChange={(e) => setEditFormData({ ...editFormData, salary: Number(e.target.value) })}
+                      className="w-full p-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">TA (₹/km)</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={editFormData.TA}
+                      onChange={(e) => setEditFormData({ ...editFormData, TA: Number(e.target.value) })}
+                      className="w-full p-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">DA (₹)</label>
+                    <input
+                      type="number"
+                      value={editFormData.DA}
+                      onChange={(e) => setEditFormData({ ...editFormData, DA: Number(e.target.value) })}
+                      className="w-full p-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Allocated Area / Zone</label>
+                  <input
+                    type="text"
+                    value={editFormData.allocatedArea}
+                    onChange={(e) => setEditFormData({ ...editFormData, allocatedArea: e.target.value })}
+                    className="w-full p-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                {/* Emergency Contact */}
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2">
+                  <h4 className="font-bold text-slate-800 text-[11px] uppercase tracking-wider text-blue-600">
+                    Emergency Contact Details
+                  </h4>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">Contact Name</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Ramesh Senior"
+                        value={editFormData.emergencyContact?.name || ''}
+                        onChange={(e) =>
+                          setEditFormData({
+                            ...editFormData,
+                            emergencyContact: { ...editFormData.emergencyContact, name: e.target.value },
+                          })
+                        }
+                        className="w-full p-2 text-xs border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">Emergency Phone</label>
+                      <input
+                        type="text"
+                        placeholder="+91 9876543210"
+                        value={editFormData.emergencyContact?.phone || ''}
+                        onChange={(e) =>
+                          setEditFormData({
+                            ...editFormData,
+                            emergencyContact: { ...editFormData.emergencyContact, phone: e.target.value },
+                          })
+                        }
+                        className="w-full p-2 text-xs border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">Relation</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Father / Spouse"
+                        value={editFormData.emergencyContact?.relation || ''}
+                        onChange={(e) =>
+                          setEditFormData({
+                            ...editFormData,
+                            emergencyContact: { ...editFormData.emergencyContact, relation: e.target.value },
+                          })
+                        }
+                        className="w-full p-2 text-xs border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Residential Address */}
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2">
+                  <h4 className="font-bold text-slate-800 text-[11px] uppercase tracking-wider text-blue-600">
+                    Residential Address
+                  </h4>
+                  <div>
+                    <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">Street Address</label>
+                    <input
+                      type="text"
+                      placeholder="House No, Street, Landmark"
+                      value={editFormData.address?.street || ''}
+                      onChange={(e) =>
+                        setEditFormData({
+                          ...editFormData,
+                          address: { ...editFormData.address, street: e.target.value },
+                        })
+                      }
+                      className="w-full p-2 text-xs border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white mb-2"
+                    />
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">City</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Lucknow"
+                        value={editFormData.address?.city || ''}
+                        onChange={(e) =>
+                          setEditFormData({
+                            ...editFormData,
+                            address: { ...editFormData.address, city: e.target.value },
+                          })
+                        }
+                        className="w-full p-2 text-xs border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">State</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Uttar Pradesh"
+                        value={editFormData.address?.state || ''}
+                        onChange={(e) =>
+                          setEditFormData({
+                            ...editFormData,
+                            address: { ...editFormData.address, state: e.target.value },
+                          })
+                        }
+                        className="w-full p-2 text-xs border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">Pincode</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. 226001"
+                        value={editFormData.address?.pincode || ''}
+                        onChange={(e) =>
+                          setEditFormData({
+                            ...editFormData,
+                            address: { ...editFormData.address, pincode: e.target.value },
+                          })
+                        }
+                        className="w-full p-2 text-xs border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-3 pt-3 border-t">
+                  <button
+                    type="button"
+                    onClick={() => setEmpToEdit(null)}
+                    className="px-4 py-2 border border-slate-200 rounded-xl font-semibold text-slate-600 hover:bg-slate-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={updatingEmp}
+                    className="px-5 py-2 bg-amber-600 text-white rounded-xl font-semibold hover:bg-amber-700 shadow-sm flex items-center gap-1.5 disabled:opacity-50"
+                  >
+                    {updatingEmp && <Loader2 className="w-4 h-4 animate-spin" />}
+                    {updatingEmp ? 'Saving Changes...' : 'Save & Update DB'}
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
         )}
       </div>

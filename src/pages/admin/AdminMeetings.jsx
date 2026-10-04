@@ -49,6 +49,25 @@ const getMeetingImage = (m) => {
   return '';
 };
 
+const formatVisitDate = (rawDate) => {
+  if (!rawDate) return '-';
+  const d = new Date(rawDate);
+  if (isNaN(d.getTime())) return String(rawDate);
+
+  const datePart = d.toLocaleDateString('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+  const timePart = d.toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  });
+
+  return `${datePart}, ${timePart}`;
+};
+
 export default function AdminMeetings() {
   const todayStr = new Date().toISOString().slice(0, 10);
 
@@ -438,8 +457,8 @@ export default function AdminMeetings() {
                         </td>
 
                         {/* Date */}
-                        <td className="py-3.5 px-4 whitespace-nowrap text-slate-600 font-medium">
-                          {m.date || (m.createdAt ? new Date(m.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '-')}
+                        <td className="py-3.5 px-4 whitespace-nowrap text-slate-600 font-medium font-mono text-[11px]">
+                          {formatVisitDate(m.date || m.createdAt)}
                         </td>
 
                         {/* Status Badge */}
