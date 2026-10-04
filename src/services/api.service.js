@@ -10,8 +10,17 @@ export const DEV_API_URL = 'https://field-backend-monitor-web-ym7d.onrender.com/
 const resolveApiBase = () => {
   let url = (import.meta.env?.VITE_API_URL || process.env.REACT_APP_API_URL || '').trim();
 
-  // If environment variable has the old/dead Render service URL or empty, override with active backend
-  if (!url || url.includes('crm-b-y8rv') || url === 'undefined') {
+  const isLocalHostDomain =
+    typeof window !== 'undefined' &&
+    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
+  // If environment variable is empty, has dead URL, or points to localhost when deployed on Vercel, use live Render API
+  if (
+    !url ||
+    url.includes('crm-b-y8rv') ||
+    url === 'undefined' ||
+    (!isLocalHostDomain && url.includes('localhost'))
+  ) {
     url = DEV_API_URL;
   }
 
