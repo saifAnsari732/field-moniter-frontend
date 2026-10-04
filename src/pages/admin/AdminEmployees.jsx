@@ -1363,8 +1363,8 @@ export default function AdminEmployees() {
         {/* ========================================================================= */}
         {empToEdit && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-in fade-in">
-            <div className="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl space-y-4 border border-slate-200">
-              <div className="flex items-center justify-between border-b pb-3">
+            <div className="bg-white rounded-2xl max-w-xl w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[85vh]">
+              <div className="p-5 border-b flex items-center justify-between flex-shrink-0">
                 <div className="flex items-center gap-2">
                   <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold">
                     <Edit3 className="w-4 h-4" />
@@ -1379,285 +1379,287 @@ export default function AdminEmployees() {
                 </button>
               </div>
 
-              <form onSubmit={handleUpdateEmployee} className="space-y-4 text-xs">
-                <div className="grid grid-cols-2 gap-4">
+              <form onSubmit={handleUpdateEmployee} className="flex flex-col flex-1 overflow-hidden min-h-0">
+                <div className="p-5 overflow-y-auto space-y-4 text-xs flex-1">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block font-semibold text-slate-700 mb-1">Full Name</label>
+                      <input
+                        type="text"
+                        required
+                        value={editFormData.name}
+                        onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
+                        className="w-full p-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-slate-700 mb-1">Phone Number</label>
+                      <input
+                        type="text"
+                        required
+                        value={editFormData.phone}
+                        onChange={(e) => setEditFormData({ ...editFormData, phone: e.target.value })}
+                        className="w-full p-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block font-semibold text-slate-700 mb-1">Email Address</label>
+                      <input
+                        type="email"
+                        required
+                        value={editFormData.email}
+                        onChange={(e) => setEditFormData({ ...editFormData, email: e.target.value })}
+                        className="w-full p-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-slate-700 mb-1">New Password (leave blank if unchanged)</label>
+                      <input
+                        type="password"
+                        placeholder="••••••••"
+                        value={editFormData.password}
+                        onChange={(e) => setEditFormData({ ...editFormData, password: e.target.value })}
+                        className="w-full p-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block font-semibold text-slate-700 mb-1">Department</label>
+                      <input
+                        type="text"
+                        value={editFormData.department}
+                        onChange={(e) => setEditFormData({ ...editFormData, department: e.target.value })}
+                        className="w-full p-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-slate-700 mb-1">Designation</label>
+                      <input
+                        type="text"
+                        value={editFormData.designation}
+                        onChange={(e) => setEditFormData({ ...editFormData, designation: e.target.value })}
+                        className="w-full p-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Assign Multiple Managers */}
+                  <div className="bg-blue-50/60 p-3 rounded-xl border border-blue-200/70 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="font-bold text-slate-800 text-[11px] uppercase tracking-wider text-blue-700">
+                        Assign Managers (Multi-Manager Access)
+                      </label>
+                      <span className="text-[10px] font-bold text-blue-600 bg-white px-2 py-0.5 rounded-md border border-blue-200">
+                        {editFormData.managers?.length || 0} Selected
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 max-h-36 overflow-y-auto pr-1">
+                      {managersList.map((m) => {
+                        const isChecked = (editFormData.managers || []).includes(m._id);
+                        return (
+                          <label
+                            key={m._id}
+                            className={`flex items-center gap-2 p-2 rounded-lg text-xs font-semibold cursor-pointer border transition ${
+                              isChecked
+                                ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
+                                : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={(e) => {
+                                const current = editFormData.managers || [];
+                                const updated = e.target.checked
+                                  ? [...current, m._id]
+                                  : current.filter((id) => id !== m._id);
+                                setEditFormData({
+                                  ...editFormData,
+                                  managers: updated,
+                                  managerId: updated[0] || '',
+                                });
+                              }}
+                              className="hidden"
+                            />
+                            <Avatar src={m.avatar} name={m.name} size="xs" />
+                            <span className="truncate">{m.name}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <label className="block font-semibold text-slate-700 mb-1">Monthly Salary (₹)</label>
+                      <input
+                        type="number"
+                        value={editFormData.salary}
+                        onChange={(e) => setEditFormData({ ...editFormData, salary: Number(e.target.value) })}
+                        className="w-full p-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-slate-700 mb-1">TA (₹/km)</label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        value={editFormData.TA}
+                        onChange={(e) => setEditFormData({ ...editFormData, TA: Number(e.target.value) })}
+                        className="w-full p-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-slate-700 mb-1">DA (₹)</label>
+                      <input
+                        type="number"
+                        value={editFormData.DA}
+                        onChange={(e) => setEditFormData({ ...editFormData, DA: Number(e.target.value) })}
+                        className="w-full p-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                  </div>
+
                   <div>
-                    <label className="block font-semibold text-slate-700 mb-1">Full Name</label>
+                    <label className="block font-semibold text-slate-700 mb-1">Allocated Area / Zone</label>
                     <input
                       type="text"
-                      required
-                      value={editFormData.name}
-                      onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
+                      value={editFormData.allocatedArea}
+                      onChange={(e) => setEditFormData({ ...editFormData, allocatedArea: e.target.value })}
                       className="w-full p-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
-                  <div>
-                    <label className="block font-semibold text-slate-700 mb-1">Phone Number</label>
-                    <input
-                      type="text"
-                      required
-                      value={editFormData.phone}
-                      onChange={(e) => setEditFormData({ ...editFormData, phone: e.target.value })}
-                      className="w-full p-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block font-semibold text-slate-700 mb-1">Email Address</label>
-                    <input
-                      type="email"
-                      required
-                      value={editFormData.email}
-                      onChange={(e) => setEditFormData({ ...editFormData, email: e.target.value })}
-                      className="w-full p-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500"
-                    />
+                  {/* Emergency Contact */}
+                  <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2">
+                    <h4 className="font-bold text-slate-800 text-[11px] uppercase tracking-wider text-blue-600">
+                      Emergency Contact Details
+                    </h4>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div>
+                        <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">Contact Name</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. Ramesh Senior"
+                          value={editFormData.emergencyContact?.name || ''}
+                          onChange={(e) =>
+                            setEditFormData({
+                              ...editFormData,
+                              emergencyContact: { ...editFormData.emergencyContact, name: e.target.value },
+                            })
+                          }
+                          className="w-full p-2 text-xs border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">Emergency Phone</label>
+                        <input
+                          type="text"
+                          placeholder="+91 9876543210"
+                          value={editFormData.emergencyContact?.phone || ''}
+                          onChange={(e) =>
+                            setEditFormData({
+                              ...editFormData,
+                              emergencyContact: { ...editFormData.emergencyContact, phone: e.target.value },
+                            })
+                          }
+                          className="w-full p-2 text-xs border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">Relation</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. Father / Spouse"
+                          value={editFormData.emergencyContact?.relation || ''}
+                          onChange={(e) =>
+                            setEditFormData({
+                              ...editFormData,
+                              emergencyContact: { ...editFormData.emergencyContact, relation: e.target.value },
+                            })
+                          }
+                          className="w-full p-2 text-xs border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white"
+                        />
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <label className="block font-semibold text-slate-700 mb-1">New Password (leave blank if unchanged)</label>
-                    <input
-                      type="password"
-                      placeholder="••••••••"
-                      value={editFormData.password}
-                      onChange={(e) => setEditFormData({ ...editFormData, password: e.target.value })}
-                      className="w-full p-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block font-semibold text-slate-700 mb-1">Department</label>
-                    <input
-                      type="text"
-                      value={editFormData.department}
-                      onChange={(e) => setEditFormData({ ...editFormData, department: e.target.value })}
-                      className="w-full p-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block font-semibold text-slate-700 mb-1">Designation</label>
-                    <input
-                      type="text"
-                      value={editFormData.designation}
-                      onChange={(e) => setEditFormData({ ...editFormData, designation: e.target.value })}
-                      className="w-full p-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                </div>
-
-                {/* Assign Multiple Managers */}
-                <div className="bg-blue-50/60 p-3 rounded-xl border border-blue-200/70 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <label className="font-bold text-slate-800 text-[11px] uppercase tracking-wider text-blue-700">
-                      Assign Managers (Multi-Manager Access)
-                    </label>
-                    <span className="text-[10px] font-bold text-blue-600 bg-white px-2 py-0.5 rounded-md border border-blue-200">
-                      {editFormData.managers?.length || 0} Selected
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 max-h-36 overflow-y-auto pr-1">
-                    {managersList.map((m) => {
-                      const isChecked = (editFormData.managers || []).includes(m._id);
-                      return (
-                        <label
-                          key={m._id}
-                          className={`flex items-center gap-2 p-2 rounded-lg text-xs font-semibold cursor-pointer border transition ${
-                            isChecked
-                              ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
-                              : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
-                          }`}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={isChecked}
-                            onChange={(e) => {
-                              const current = editFormData.managers || [];
-                              const updated = e.target.checked
-                                ? [...current, m._id]
-                                : current.filter((id) => id !== m._id);
-                              setEditFormData({
-                                ...editFormData,
-                                managers: updated,
-                                managerId: updated[0] || '',
-                              });
-                            }}
-                            className="hidden"
-                          />
-                          <Avatar src={m.avatar} name={m.name} size="xs" />
-                          <span className="truncate">{m.name}</span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-3 gap-3">
-                  <div>
-                    <label className="block font-semibold text-slate-700 mb-1">Monthly Salary (₹)</label>
-                    <input
-                      type="number"
-                      value={editFormData.salary}
-                      onChange={(e) => setEditFormData({ ...editFormData, salary: Number(e.target.value) })}
-                      className="w-full p-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block font-semibold text-slate-700 mb-1">TA (₹/km)</label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      value={editFormData.TA}
-                      onChange={(e) => setEditFormData({ ...editFormData, TA: Number(e.target.value) })}
-                      className="w-full p-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block font-semibold text-slate-700 mb-1">DA (₹)</label>
-                    <input
-                      type="number"
-                      value={editFormData.DA}
-                      onChange={(e) => setEditFormData({ ...editFormData, DA: Number(e.target.value) })}
-                      className="w-full p-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Allocated Area / Zone</label>
-                  <input
-                    type="text"
-                    value={editFormData.allocatedArea}
-                    onChange={(e) => setEditFormData({ ...editFormData, allocatedArea: e.target.value })}
-                    className="w-full p-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-
-                {/* Emergency Contact */}
-                <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2">
-                  <h4 className="font-bold text-slate-800 text-[11px] uppercase tracking-wider text-blue-600">
-                    Emergency Contact Details
-                  </h4>
-                  <div className="grid grid-cols-3 gap-2">
+                  {/* Residential Address */}
+                  <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2">
+                    <h4 className="font-bold text-slate-800 text-[11px] uppercase tracking-wider text-blue-600">
+                      Residential Address
+                    </h4>
                     <div>
-                      <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">Contact Name</label>
+                      <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">Street Address</label>
                       <input
                         type="text"
-                        placeholder="e.g. Ramesh Senior"
-                        value={editFormData.emergencyContact?.name || ''}
+                        placeholder="House No, Street, Landmark"
+                        value={editFormData.address?.street || ''}
                         onChange={(e) =>
                           setEditFormData({
                             ...editFormData,
-                            emergencyContact: { ...editFormData.emergencyContact, name: e.target.value },
+                            address: { ...editFormData.address, street: e.target.value },
                           })
                         }
-                        className="w-full p-2 text-xs border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white"
+                        className="w-full p-2 text-xs border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white mb-2"
                       />
                     </div>
-                    <div>
-                      <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">Emergency Phone</label>
-                      <input
-                        type="text"
-                        placeholder="+91 9876543210"
-                        value={editFormData.emergencyContact?.phone || ''}
-                        onChange={(e) =>
-                          setEditFormData({
-                            ...editFormData,
-                            emergencyContact: { ...editFormData.emergencyContact, phone: e.target.value },
-                          })
-                        }
-                        className="w-full p-2 text-xs border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">Relation</label>
-                      <input
-                        type="text"
-                        placeholder="e.g. Father / Spouse"
-                        value={editFormData.emergencyContact?.relation || ''}
-                        onChange={(e) =>
-                          setEditFormData({
-                            ...editFormData,
-                            emergencyContact: { ...editFormData.emergencyContact, relation: e.target.value },
-                          })
-                        }
-                        className="w-full p-2 text-xs border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white"
-                      />
+                    <div className="grid grid-cols-3 gap-2">
+                      <div>
+                        <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">City</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. Lucknow"
+                          value={editFormData.address?.city || ''}
+                          onChange={(e) =>
+                            setEditFormData({
+                              ...editFormData,
+                              address: { ...editFormData.address, city: e.target.value },
+                            })
+                          }
+                          className="w-full p-2 text-xs border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">State</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. Uttar Pradesh"
+                          value={editFormData.address?.state || ''}
+                          onChange={(e) =>
+                            setEditFormData({
+                              ...editFormData,
+                              address: { ...editFormData.address, state: e.target.value },
+                            })
+                          }
+                          className="w-full p-2 text-xs border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">Pincode</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. 226001"
+                          value={editFormData.address?.pincode || ''}
+                          onChange={(e) =>
+                            setEditFormData({
+                              ...editFormData,
+                              address: { ...editFormData.address, pincode: e.target.value },
+                            })
+                          }
+                          className="w-full p-2 text-xs border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white"
+                        />
+                      </div>
                     </div>
                   </div>
                 </div>
 
-                {/* Residential Address */}
-                <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2">
-                  <h4 className="font-bold text-slate-800 text-[11px] uppercase tracking-wider text-blue-600">
-                    Residential Address
-                  </h4>
-                  <div>
-                    <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">Street Address</label>
-                    <input
-                      type="text"
-                      placeholder="House No, Street, Landmark"
-                      value={editFormData.address?.street || ''}
-                      onChange={(e) =>
-                        setEditFormData({
-                          ...editFormData,
-                          address: { ...editFormData.address, street: e.target.value },
-                        })
-                      }
-                      className="w-full p-2 text-xs border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white mb-2"
-                    />
-                  </div>
-                  <div className="grid grid-cols-3 gap-2">
-                    <div>
-                      <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">City</label>
-                      <input
-                        type="text"
-                        placeholder="e.g. Lucknow"
-                        value={editFormData.address?.city || ''}
-                        onChange={(e) =>
-                          setEditFormData({
-                            ...editFormData,
-                            address: { ...editFormData.address, city: e.target.value },
-                          })
-                        }
-                        className="w-full p-2 text-xs border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">State</label>
-                      <input
-                        type="text"
-                        placeholder="e.g. Uttar Pradesh"
-                        value={editFormData.address?.state || ''}
-                        onChange={(e) =>
-                          setEditFormData({
-                            ...editFormData,
-                            address: { ...editFormData.address, state: e.target.value },
-                          })
-                        }
-                        className="w-full p-2 text-xs border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">Pincode</label>
-                      <input
-                        type="text"
-                        placeholder="e.g. 226001"
-                        value={editFormData.address?.pincode || ''}
-                        onChange={(e) =>
-                          setEditFormData({
-                            ...editFormData,
-                            address: { ...editFormData.address, pincode: e.target.value },
-                          })
-                        }
-                        className="w-full p-2 text-xs border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex justify-end gap-3 pt-3 border-t">
+                <div className="p-4 bg-slate-50 border-t border-slate-200 flex justify-end gap-3 flex-shrink-0">
                   <button
                     type="button"
                     onClick={() => setEmpToEdit(null)}
