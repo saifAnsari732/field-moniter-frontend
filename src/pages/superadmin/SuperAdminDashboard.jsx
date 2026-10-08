@@ -29,6 +29,12 @@ import {
   ShieldAlert,
   ArrowUpRight,
   Eye,
+  UserCheck,
+  Compass,
+  X,
+  Sparkles,
+  ChevronRight,
+  Download,
 } from 'lucide-react';
 import { API } from '../../services/api.service';
 import toast from 'react-hot-toast';
@@ -126,7 +132,7 @@ export default function SuperAdminDashboard() {
     try {
       const res = await API.post('/superadmin/organizations', formData);
       if (res.data?.success) {
-        toast.success(`🎉 Organization "${formData.name}" onboarded!`);
+        toast.success(`🎉 Organization "${formData.name}" onboarded successfully!`);
         setShowCreateModal(false);
         setFormData({
           name: '',
@@ -206,191 +212,256 @@ export default function SuperAdminDashboard() {
 
   return (
     <KisanConnectLayout>
-      <div className="space-y-6 pb-12">
-        {/* Modern Super Admin Header Bar */}
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider bg-rose-50 text-rose-700 border border-rose-200 rounded-md">
-                Super Admin Console
-              </span>
-              <span className="text-xs text-slate-400 font-semibold">Master Platform Hub</span>
+      <div className="space-y-6 max-w-7xl mx-auto pb-16 font-sans">
+        
+        {/* ========================================================================= */}
+        {/* 1. HERO HEADER WITH ACTIONS & BRANDING                                    */}
+        {/* ========================================================================= */}
+        <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/90 shadow-sm space-y-6 relative overflow-hidden">
+          {/* Background glow */}
+          <div className="absolute top-0 right-0 w-96 h-96 bg-gradient-to-br from-indigo-50/50 via-blue-50/30 to-transparent rounded-full blur-3xl pointer-events-none" />
+
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
+            <div className="space-y-2">
+              <div className="flex items-center flex-wrap gap-2.5">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-blue-50 text-blue-700 border border-blue-200 shadow-2xs">
+                  <ShieldCheck className="w-3.5 h-3.5 text-blue-600" />
+                  Super Admin Master Console
+                </span>
+                <span className="text-xs text-slate-400 font-mono flex items-center gap-1 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-100 font-medium">
+                  Multi-Tenant Platform Control
+                </span>
+              </div>
+              <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
+                Platform & Razorpay Payment Hub
+              </h1>
+              <p className="text-xs sm:text-sm text-slate-600 max-w-2xl leading-relaxed font-medium">
+                Manage multi-tenant customer organizations, live Razorpay transaction ledger, subscription pricing plans, and seat quotas.
+              </p>
             </div>
-            <h1 className="text-2xl font-bold text-slate-900 mt-1 tracking-tight">
-              Platform & Razorpay Payment Hub
-            </h1>
-            <p className="text-slate-500 text-xs sm:text-sm mt-0.5">
-              Manage multi-tenant organizations, live Razorpay transactions, subscription plans, and tenant quotas.
-            </p>
+
+            <div className="flex items-center gap-3 shrink-0">
+              <button
+                type="button"
+                onClick={fetchSuperAdminData}
+                disabled={loading}
+                className="p-3 bg-slate-50 hover:bg-slate-100 text-slate-700 rounded-2xl border border-slate-200 transition cursor-pointer flex items-center justify-center active:scale-95 shadow-2xs disabled:opacity-60"
+                title="Refresh Platform Analytics"
+              >
+                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowCreateModal(true)}
+                className="px-5 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs sm:text-sm rounded-2xl shadow-md shadow-blue-500/20 transition-all active:scale-95 cursor-pointer flex items-center gap-2"
+              >
+                <Plus className="w-4 h-4 stroke-[2.5]" />
+                <span>Add Organization</span>
+              </button>
+            </div>
           </div>
 
-          <div className="flex items-center gap-3 flex-wrap">
+          {/* Quick Navigation Tabs Bar */}
+          <div className="pt-5 border-t border-slate-100 flex items-center gap-2.5 overflow-x-auto scrollbar-none relative z-10 p-1.5 bg-slate-100/80 rounded-2xl border border-slate-200/80 shadow-inner">
             <button
-              onClick={() => fetchSuperAdminData()}
-              className="p-2.5 bg-white hover:bg-slate-50 text-slate-700 rounded-xl border border-slate-200 shadow-xs transition"
-              title="Refresh Data"
+              type="button"
+              onClick={() => setActiveTab('overview')}
+              className={`flex items-center gap-2.5 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all duration-200 cursor-pointer shrink-0 ${
+                activeTab === 'overview'
+                  ? 'bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 text-white shadow-lg shadow-blue-500/25 border border-blue-400/40 scale-[1.02]'
+                  : 'bg-white hover:bg-slate-50 text-slate-700 hover:text-blue-700 border border-slate-200/90 shadow-2xs hover:shadow-xs'
+              }`}
             >
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+              <div
+                className={`w-6 h-6 rounded-lg flex items-center justify-center transition-colors ${
+                  activeTab === 'overview' ? 'bg-white/20 text-white' : 'bg-blue-50 text-blue-600 border border-blue-100'
+                }`}
+              >
+                <Activity className="w-3.5 h-3.5 stroke-[2.5]" />
+              </div>
+              <span>Platform Overview</span>
             </button>
+
             <button
-              onClick={() => setShowCreateModal(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs sm:text-sm rounded-xl shadow-sm transition-all active:scale-95 cursor-pointer"
+              type="button"
+              onClick={() => setActiveTab('organizations')}
+              className={`flex items-center gap-2.5 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all duration-200 cursor-pointer shrink-0 ${
+                activeTab === 'organizations'
+                  ? 'bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 text-white shadow-lg shadow-blue-500/25 border border-blue-400/40 scale-[1.02]'
+                  : 'bg-white hover:bg-slate-50 text-slate-700 hover:text-purple-700 border border-slate-200/90 shadow-2xs hover:shadow-xs'
+              }`}
             >
-              <Plus className="w-4 h-4 stroke-[2.5]" /> Add Organization
+              <div
+                className={`w-6 h-6 rounded-lg flex items-center justify-center transition-colors ${
+                  activeTab === 'organizations'
+                    ? 'bg-white/20 text-white'
+                    : 'bg-purple-50 text-purple-600 border border-purple-100'
+                }`}
+              >
+                <Building2 className="w-3.5 h-3.5 stroke-[2.5]" />
+              </div>
+              <span>Customer Organizations</span>
+              <span
+                className={`px-2 py-0.5 rounded-full text-[11px] font-extrabold font-mono ${
+                  activeTab === 'organizations'
+                    ? 'bg-white/20 text-white'
+                    : 'bg-purple-100 text-purple-800 border border-purple-200/60'
+                }`}
+              >
+                {organizations.length}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('payments')}
+              className={`flex items-center gap-2.5 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all duration-200 cursor-pointer shrink-0 ${
+                activeTab === 'payments'
+                  ? 'bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 text-white shadow-lg shadow-blue-500/25 border border-blue-400/40 scale-[1.02]'
+                  : 'bg-white hover:bg-slate-50 text-slate-700 hover:text-emerald-700 border border-slate-200/90 shadow-2xs hover:shadow-xs'
+              }`}
+            >
+              <div
+                className={`w-6 h-6 rounded-lg flex items-center justify-center transition-colors ${
+                  activeTab === 'payments'
+                    ? 'bg-white/20 text-white'
+                    : 'bg-emerald-50 text-emerald-600 border border-emerald-100'
+                }`}
+              >
+                <CreditCard className="w-3.5 h-3.5 stroke-[2.5]" />
+              </div>
+              <span>Razorpay Payment Ledger</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('plans')}
+              className={`flex items-center gap-2.5 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all duration-200 cursor-pointer shrink-0 ${
+                activeTab === 'plans'
+                  ? 'bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 text-white shadow-lg shadow-blue-500/25 border border-blue-400/40 scale-[1.02]'
+                  : 'bg-white hover:bg-slate-50 text-slate-700 hover:text-amber-700 border border-slate-200/90 shadow-2xs hover:shadow-xs'
+              }`}
+            >
+              <div
+                className={`w-6 h-6 rounded-lg flex items-center justify-center transition-colors ${
+                  activeTab === 'plans' ? 'bg-white/20 text-white' : 'bg-amber-50 text-amber-600 border border-amber-100'
+                }`}
+              >
+                <Zap className="w-3.5 h-3.5 stroke-[2.5]" />
+              </div>
+              <span>SaaS Pricing Plans</span>
             </button>
           </div>
         </div>
 
-        {/* Multi-Screen Tab Navigation Bar */}
-        <div className="flex items-center gap-2 border-b border-slate-200 bg-white p-2 rounded-2xl shadow-xs overflow-x-auto">
-          <button
-            onClick={() => setActiveTab('overview')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all whitespace-nowrap cursor-pointer ${
-              activeTab === 'overview'
-                ? 'bg-rose-600 text-white shadow-sm'
-                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-            }`}
-          >
-            <Activity className="w-4 h-4" /> Platform Overview
-          </button>
-
-          <button
-            onClick={() => setActiveTab('organizations')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all whitespace-nowrap cursor-pointer ${
-              activeTab === 'organizations'
-                ? 'bg-rose-600 text-white shadow-sm'
-                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-            }`}
-          >
-            <Building2 className="w-4 h-4" /> Organizations ({organizations.length})
-          </button>
-
-          <button
-            onClick={() => setActiveTab('payments')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all whitespace-nowrap cursor-pointer ${
-              activeTab === 'payments'
-                ? 'bg-rose-600 text-white shadow-sm'
-                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-            }`}
-          >
-            <CreditCard className="w-4 h-4" /> Razorpay Payment Ledger
-          </button>
-
-          <button
-            onClick={() => setActiveTab('plans')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all whitespace-nowrap cursor-pointer ${
-              activeTab === 'plans'
-                ? 'bg-rose-600 text-white shadow-sm'
-                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-            }`}
-          >
-            <Zap className="w-4 h-4" /> SaaS Pricing Plans
-          </button>
-
-          <button
-            onClick={() => setActiveTab('settings')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all whitespace-nowrap cursor-pointer ${
-              activeTab === 'settings'
-                ? 'bg-rose-600 text-white shadow-sm'
-                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-            }`}
-          >
-            <Settings className="w-4 h-4" /> System Settings & Keys
-          </button>
-        </div>
-
-        {/* ════════════════════════════════════════════════════════════════ */}
-        {/* SCREEN 1: OVERVIEW DASHBOARD */}
-        {/* ════════════════════════════════════════════════════════════════ */}
+        {/* ========================================================================= */}
+        {/* SCREEN 1: OVERVIEW DASHBOARD                                              */}
+        {/* ========================================================================= */}
         {activeTab === 'overview' && (
           <div className="space-y-6">
-            {/* KPI Summary Cards Grid */}
+            {/* 5 KPI Summary Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-              {/* Total Revenue */}
-              <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
-                <div className="flex items-center justify-between text-slate-500">
-                  <span className="text-xs font-bold uppercase tracking-wider">Total Revenue</span>
-                  <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+              
+              {/* Card 1: Total Revenue */}
+              <div className="bg-white p-5 rounded-3xl border border-slate-200/90 shadow-sm space-y-2 hover:shadow-md transition">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Total Revenue</span>
+                  <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold border border-emerald-100">
                     <CreditCard className="w-4 h-4" />
                   </div>
                 </div>
-                <h3 className="text-2xl font-black text-slate-900 mt-2">₹{(stats.totalRevenue || paymentSummary.totalRevenue || 0).toLocaleString('en-IN')}</h3>
-                <span className="text-[11px] text-emerald-600 font-bold block mt-1">
-                  From {stats.paidTransactionsCount || paymentSummary.paidCount} Verified Payments
+                <h3 className="text-2xl font-extrabold text-slate-900 font-mono tracking-tight">
+                  ₹{(stats.totalRevenue || paymentSummary.totalRevenue || 0).toLocaleString('en-IN')}
+                </h3>
+                <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100 inline-block">
+                  {stats.paidTransactionsCount || paymentSummary.paidCount} Verified Payments
                 </span>
               </div>
 
-              {/* Total Organizations */}
-              <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
-                <div className="flex items-center justify-between text-slate-500">
-                  <span className="text-xs font-bold uppercase tracking-wider">Organizations</span>
-                  <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
+              {/* Card 2: Total Organizations */}
+              <div className="bg-white p-5 rounded-3xl border border-slate-200/90 shadow-sm space-y-2 hover:shadow-md transition">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Organizations</span>
+                  <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold border border-indigo-100">
                     <Building2 className="w-4 h-4" />
                   </div>
                 </div>
-                <h3 className="text-2xl font-black text-slate-900 mt-2">{stats.totalOrgs || organizations.length}</h3>
-                <span className="text-xs font-bold text-emerald-600 flex items-center gap-1 mt-1">
-                  <CheckCircle2 className="w-3.5 h-3.5" /> {stats.activeOrgs} Active Customers
+                <h3 className="text-2xl font-extrabold text-slate-900 font-mono tracking-tight">
+                  {stats.totalOrgs || organizations.length}
+                </h3>
+                <span className="text-[11px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100 inline-block">
+                  {stats.activeOrgs} Active Customers
                 </span>
               </div>
 
-              {/* Field Employees */}
-              <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
-                <div className="flex items-center justify-between text-slate-500">
-                  <span className="text-xs font-bold uppercase tracking-wider">Field Employees</span>
-                  <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
+              {/* Card 3: Field Employees */}
+              <div className="bg-white p-5 rounded-3xl border border-slate-200/90 shadow-sm space-y-2 hover:shadow-md transition">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Field Employees</span>
+                  <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold border border-blue-100">
                     <Users className="w-4 h-4" />
                   </div>
                 </div>
-                <h3 className="text-2xl font-black text-slate-900 mt-2">{stats.totalEmployees}</h3>
-                <span className="text-xs text-slate-500 font-semibold block mt-1">Across all active orgs</span>
-              </div>
-
-              {/* Total Managers */}
-              <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
-                <div className="flex items-center justify-between text-slate-500">
-                  <span className="text-xs font-bold uppercase tracking-wider">Managers</span>
-                  <div className="w-8 h-8 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center">
-                    <ShieldCheck className="w-4 h-4" />
-                  </div>
-                </div>
-                <h3 className="text-2xl font-black text-slate-900 mt-2">{stats.totalManagers}</h3>
-                <span className="text-xs text-purple-600 font-semibold block mt-1">Assigned Team Leaders</span>
-              </div>
-
-              {/* Global Telemetry Distance */}
-              <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
-                <div className="flex items-center justify-between text-slate-500">
-                  <span className="text-xs font-bold uppercase tracking-wider">Tracked Distance</span>
-                  <div className="w-8 h-8 rounded-lg bg-cyan-50 text-cyan-600 flex items-center justify-center">
-                    <Activity className="w-4 h-4" />
-                  </div>
-                </div>
-                <h3 className="text-2xl font-black text-slate-900 mt-2">
-                  {stats.totalDistanceTracked ? stats.totalDistanceTracked.toLocaleString('en-IN') : '0'} <span className="text-xs font-semibold text-slate-400">km</span>
+                <h3 className="text-2xl font-extrabold text-slate-900 font-mono tracking-tight">
+                  {stats.totalEmployees || 0}
                 </h3>
-                <span className="text-xs text-cyan-600 font-semibold block mt-1">Global GPS Telemetry</span>
+                <span className="text-[11px] font-medium text-slate-500 block">Across all active orgs</span>
+              </div>
+
+              {/* Card 4: Total Managers */}
+              <div className="bg-white p-5 rounded-3xl border border-slate-200/90 shadow-sm space-y-2 hover:shadow-md transition">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Managers</span>
+                  <div className="w-9 h-9 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center font-bold border border-purple-100">
+                    <UserCheck className="w-4 h-4" />
+                  </div>
+                </div>
+                <h3 className="text-2xl font-extrabold text-slate-900 font-mono tracking-tight">
+                  {stats.totalManagers || 0}
+                </h3>
+                <span className="text-[11px] font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded border border-purple-100 inline-block">
+                  Team Leaders
+                </span>
+              </div>
+
+              {/* Card 5: Tracked Distance */}
+              <div className="bg-white p-5 rounded-3xl border border-slate-200/90 shadow-sm space-y-2 hover:shadow-md transition">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Tracked Distance</span>
+                  <div className="w-9 h-9 rounded-xl bg-teal-50 text-teal-600 flex items-center justify-center font-bold border border-teal-100">
+                    <Compass className="w-4 h-4" />
+                  </div>
+                </div>
+                <h3 className="text-2xl font-extrabold text-slate-900 font-mono tracking-tight">
+                  {stats.totalDistanceTracked ? stats.totalDistanceTracked.toLocaleString('en-IN') : '0'} <span className="text-xs text-slate-400 font-normal">km</span>
+                </h3>
+                <span className="text-[11px] font-bold text-teal-700 bg-teal-50 px-2 py-0.5 rounded border border-teal-100 inline-block">
+                  GPS Telemetry
+                </span>
               </div>
             </div>
 
-            {/* Quick Overview Split Section */}
+            {/* Split Overview Section */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-              {/* Left Column: Recent Organizations */}
-              <div className="lg:col-span-7 bg-white rounded-2xl border border-slate-200 shadow-xs p-5 space-y-4">
-                <div className="flex items-center justify-between border-b pb-3">
+              
+              {/* Left Column: Recent Customer Organizations */}
+              <div className="lg:col-span-7 bg-white rounded-3xl border border-slate-200/90 shadow-sm p-6 space-y-5">
+                <div className="flex items-center justify-between pb-3.5 border-b border-slate-100">
                   <div>
-                    <h2 className="text-base font-bold text-slate-900">Recent Customer Organizations</h2>
-                    <p className="text-xs text-slate-500">Newly onboarded SaaS tenants & subscriptions</p>
+                    <h2 className="text-base font-bold text-slate-900 tracking-tight">Recent Customer Organizations</h2>
+                    <p className="text-xs text-slate-500 font-medium">Newly onboarded SaaS tenants & subscriptions</p>
                   </div>
                   <button
+                    type="button"
                     onClick={() => setActiveTab('organizations')}
-                    className="text-xs font-bold text-rose-600 hover:underline flex items-center gap-1 cursor-pointer"
+                    className="text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 cursor-pointer hover:underline"
                   >
-                    View All <ArrowUpRight className="w-3.5 h-3.5" />
+                    View All <ArrowUpRight className="w-4 h-4" />
                   </button>
                 </div>
 
-                <div className="space-y-2.5">
+                <div className="space-y-3">
                   {organizations.length === 0 ? (
                     <div className="p-8 text-center text-slate-400">
                       <Building2 className="w-8 h-8 mx-auto opacity-30 mb-2" />
@@ -398,22 +469,22 @@ export default function SuperAdminDashboard() {
                     </div>
                   ) : (
                     organizations.slice(0, 5).map((org) => (
-                      <div key={org._id} className="p-3.5 rounded-xl border border-slate-100 hover:bg-slate-50 flex items-center justify-between transition">
-                        <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-700 font-black flex items-center justify-center text-xs border border-indigo-100">
+                      <div key={org._id} className="p-4 rounded-2xl bg-slate-50/70 border border-slate-200/80 hover:bg-white hover:shadow-sm transition flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-3.5 min-w-0">
+                          <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white font-extrabold flex items-center justify-center text-xs shadow-2xs shrink-0">
                             {org.name.slice(0, 2).toUpperCase()}
                           </div>
-                          <div>
-                            <div className="font-bold text-slate-900 text-xs sm:text-sm">{org.name}</div>
-                            <div className="text-[11px] text-slate-500">{org.email} • {org.phone}</div>
+                          <div className="min-w-0">
+                            <h4 className="font-bold text-slate-900 text-xs sm:text-sm truncate">{org.name}</h4>
+                            <p className="text-[11px] text-slate-500 truncate font-medium">{org.email} • {org.phone}</p>
                           </div>
                         </div>
 
-                        <div className="text-right">
-                          <span className="inline-block px-2 py-0.5 rounded-md text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                        <div className="text-right shrink-0">
+                          <span className="inline-block px-2.5 py-0.5 rounded-lg text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200">
                             {org.plan?.planName || 'Growth Pro'}
                           </span>
-                          <div className="text-[10px] font-bold text-emerald-600 mt-1">
+                          <div className="text-[11px] font-mono font-bold text-emerald-700 mt-1">
                             Paid: ₹{(org.totalRevenuePaid || 0).toLocaleString('en-IN')}
                           </div>
                         </div>
@@ -423,22 +494,23 @@ export default function SuperAdminDashboard() {
                 </div>
               </div>
 
-              {/* Right Column: Recent Payments Feed */}
-              <div className="lg:col-span-5 bg-white rounded-2xl border border-slate-200 shadow-xs p-5 space-y-4">
-                <div className="flex items-center justify-between border-b pb-3">
+              {/* Right Column: Live Razorpay Activity Stream */}
+              <div className="lg:col-span-5 bg-white rounded-3xl border border-slate-200/90 shadow-sm p-6 space-y-5">
+                <div className="flex items-center justify-between pb-3.5 border-b border-slate-100">
                   <div>
-                    <h2 className="text-base font-bold text-slate-900">Live Razorpay Activity</h2>
-                    <p className="text-xs text-slate-500">Real-time payment transactions</p>
+                    <h2 className="text-base font-bold text-slate-900 tracking-tight">Live Razorpay Activity</h2>
+                    <p className="text-xs text-slate-500 font-medium">Real-time payment transactions</p>
                   </div>
                   <button
+                    type="button"
                     onClick={() => setActiveTab('payments')}
-                    className="text-xs font-bold text-emerald-600 hover:underline flex items-center gap-1 cursor-pointer"
+                    className="text-xs font-bold text-emerald-600 hover:text-emerald-700 flex items-center gap-1 cursor-pointer hover:underline"
                   >
-                    View Ledger <ArrowUpRight className="w-3.5 h-3.5" />
+                    View Ledger <ArrowUpRight className="w-4 h-4" />
                   </button>
                 </div>
 
-                <div className="space-y-2.5">
+                <div className="space-y-3">
                   {payments.length === 0 ? (
                     <div className="p-8 text-center text-slate-400">
                       <CreditCard className="w-8 h-8 mx-auto opacity-30 mb-2" />
@@ -447,17 +519,21 @@ export default function SuperAdminDashboard() {
                     </div>
                   ) : (
                     payments.slice(0, 5).map((pay) => (
-                      <div key={pay._id} className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center justify-between">
-                        <div>
-                          <div className="text-xs font-black text-slate-900">
-                            {pay.organization?.name || pay.notes?.userName || pay.notes?.userEmail || 'Subscription Checkout'}
-                          </div>
-                          <div className="text-[10px] font-mono text-slate-500">{pay.razorpayOrderId}</div>
+                      <div key={pay._id} className="p-3.5 rounded-2xl bg-slate-50/70 border border-slate-200/80 flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <h4 className="text-xs font-bold text-slate-900 truncate">
+                            {pay.organization?.name || pay.notes?.userName || pay.notes?.userEmail || 'Subscription Order'}
+                          </h4>
+                          <span className="text-[10px] font-mono text-slate-400 block truncate">{pay.razorpayOrderId}</span>
                         </div>
 
-                        <div className="text-right">
-                          <div className="text-xs font-black text-emerald-600">₹{pay.amount.toLocaleString('en-IN')}</div>
-                          <span className={`text-[9px] font-black px-1.5 py-0.5 rounded uppercase ${pay.status === 'paid' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
+                        <div className="text-right shrink-0">
+                          <div className="text-xs font-extrabold text-emerald-700 font-mono">₹{pay.amount.toLocaleString('en-IN')}</div>
+                          <span className={`text-[9px] font-bold px-2 py-0.5 rounded-md uppercase border ${
+                            pay.status === 'paid'
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                              : 'bg-amber-50 text-amber-700 border-amber-200'
+                          }`}>
                             {pay.status}
                           </span>
                         </div>
@@ -466,37 +542,38 @@ export default function SuperAdminDashboard() {
                   )}
                 </div>
               </div>
+
             </div>
           </div>
         )}
 
-        {/* ════════════════════════════════════════════════════════════════ */}
-        {/* SCREEN 2: ORGANIZATIONS MANAGEMENT */}
-        {/* ════════════════════════════════════════════════════════════════ */}
+        {/* ========================================================================= */}
+        {/* SCREEN 2: ORGANIZATIONS MANAGEMENT                                       */}
+        {/* ========================================================================= */}
         {activeTab === 'organizations' && (
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="p-5 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="bg-white rounded-3xl border border-slate-200/90 shadow-sm p-6 sm:p-7 space-y-6">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-100">
               <div>
-                <h2 className="text-lg font-bold text-slate-900">Customer Organizations Table</h2>
-                <p className="text-xs text-slate-500">Manage tenant subscriptions, user limits, status, and custom renewals.</p>
+                <h2 className="text-lg font-bold text-slate-900 tracking-tight">Customer Organizations Directory</h2>
+                <p className="text-xs text-slate-500 font-medium">Manage tenant subscriptions, seat limits, status, and renewals</p>
               </div>
 
               <div className="flex items-center gap-3 flex-wrap">
-                <div className="relative">
-                  <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+                <div className="relative w-full sm:w-64">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
                   <input
                     type="text"
-                    placeholder="Search org, email, slug..."
+                    placeholder="Search org name, email, slug..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-9 pr-4 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 w-64"
+                    className="w-full pl-9 pr-4 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-medium"
                   />
                 </div>
 
                 <select
                   value={statusFilter}
                   onChange={(e) => setStatusFilter(e.target.value)}
-                  className="px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 font-semibold"
                 >
                   <option value="all">All Status</option>
                   <option value="active">Active</option>
@@ -505,99 +582,102 @@ export default function SuperAdminDashboard() {
               </div>
             </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
+            <div className="overflow-x-auto rounded-2xl border border-slate-200/90">
+              <table className="w-full text-left text-xs border-collapse">
                 <thead>
-                  <tr className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider font-semibold border-b border-slate-200">
-                    <th className="py-3.5 px-6">Organization</th>
-                    <th className="py-3.5 px-6">Plan & Limit</th>
-                    <th className="py-3.5 px-6">Active Users</th>
-                    <th className="py-3.5 px-6">Total Paid</th>
-                    <th className="py-3.5 px-6">Expires At</th>
-                    <th className="py-3.5 px-6">Status</th>
-                    <th className="py-3.5 px-6 text-right">Actions</th>
+                  <tr className="bg-slate-50 text-slate-700 font-bold uppercase tracking-wider text-[10px] border-b border-slate-200">
+                    <th className="py-3.5 px-5">Organization Details</th>
+                    <th className="py-3.5 px-5">Subscription Plan</th>
+                    <th className="py-3.5 px-5">Active User Quota</th>
+                    <th className="py-3.5 px-5">Total Paid Revenue</th>
+                    <th className="py-3.5 px-5">Plan Expiry Date</th>
+                    <th className="py-3.5 px-5">Tenant Status</th>
+                    <th className="py-3.5 px-5 text-right">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-200 text-sm font-semibold">
+                <tbody className="divide-y divide-slate-100 font-medium text-slate-800">
                   {filteredOrgs.length === 0 ? (
                     <tr>
                       <td colSpan="7" className="py-12 text-center text-slate-400 font-normal">
-                        No organizations found matching search criteria.
+                        No customer organizations found matching search criteria.
                       </td>
                     </tr>
                   ) : (
                     filteredOrgs.map((org) => (
-                      <tr key={org._id} className="hover:bg-slate-50/80 transition-colors">
-                        <td className="py-4 px-6 text-slate-900">
+                      <tr key={org._id} className="hover:bg-slate-50/80 transition">
+                        <td className="py-4 px-5 text-slate-900">
                           <div className="flex items-center gap-3">
-                            <div className="w-9 h-9 rounded-lg bg-indigo-100 text-indigo-700 font-bold flex items-center justify-center text-sm">
+                            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white font-extrabold flex items-center justify-center text-xs shadow-2xs shrink-0">
                               {org.name.slice(0, 2).toUpperCase()}
                             </div>
-                            <div>
-                              <div className="font-bold text-slate-900">{org.name}</div>
-                              <div className="text-xs text-slate-500 font-normal">{org.email} • {org.phone}</div>
+                            <div className="min-w-0">
+                              <h4 className="font-bold text-slate-900 text-xs sm:text-sm truncate">{org.name}</h4>
+                              <p className="text-[11px] text-slate-500 truncate font-medium">{org.email} • {org.phone}</p>
                             </div>
                           </div>
                         </td>
 
-                        <td className="py-4 px-6">
-                          <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-extrabold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                        <td className="py-4 px-5">
+                          <span className="inline-block px-2.5 py-1 rounded-md text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200">
                             {org.plan?.planName || 'Growth Pro'}
                           </span>
-                          <div className="text-xs text-slate-500 mt-0.5">
-                            Max: {org.plan?.maxEmployees || 50} Employees
+                          <div className="text-[11px] text-slate-500 mt-0.5 font-medium">
+                            Max Seats: {org.plan?.maxEmployees || 50} Employees
                           </div>
                         </td>
 
-                        <td className="py-4 px-6">
-                          <div className="text-slate-900 font-bold">
-                            {org.currentEmployeeCount || 0} / {org.plan?.maxEmployees || 50}
+                        <td className="py-4 px-5">
+                          <div className="text-slate-900 font-bold font-mono text-xs">
+                            {org.currentEmployeeCount || 0} / {org.plan?.maxEmployees || 50} <span className="font-normal text-slate-400">Emps</span>
                           </div>
-                          <div className="text-xs text-slate-500 font-normal">
+                          <div className="text-[11px] text-slate-500 font-medium">
                             Managers: {org.currentManagerCount || 0}
                           </div>
                         </td>
 
-                        <td className="py-4 px-6 text-emerald-600 font-black">
+                        <td className="py-4 px-5 font-mono font-extrabold text-emerald-700 text-sm">
                           ₹{(org.totalRevenuePaid || 0).toLocaleString('en-IN')}
                         </td>
 
-                        <td className="py-4 px-6 text-xs text-slate-600">
+                        <td className="py-4 px-5 text-xs text-slate-600 font-medium">
                           {org.plan?.expiresAt ? new Date(org.plan.expiresAt).toLocaleDateString('en-IN') : 'Lifetime / Active'}
                         </td>
 
-                        <td className="py-4 px-6">
+                        <td className="py-4 px-5">
                           {org.status === 'active' ? (
-                            <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                              Active
+                            <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 inline-flex items-center gap-1">
+                              <CheckCircle2 className="w-3.5 h-3.5" /> Active
                             </span>
                           ) : (
-                            <span className="px-3 py-1 rounded-full text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200">
-                              Suspended
+                            <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200 inline-flex items-center gap-1">
+                              <XCircle className="w-3.5 h-3.5" /> Suspended
                             </span>
                           )}
                         </td>
 
-                        <td className="py-4 px-6 text-right">
+                        <td className="py-4 px-5 text-right">
                           <div className="flex items-center justify-end gap-2">
                             <button
+                              type="button"
                               onClick={() => handleOpenSubscriptionModal(org)}
-                              className="px-3 py-1.5 text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition"
+                              className="px-3 py-1.5 text-xs font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-xl transition cursor-pointer border border-blue-200/60"
                             >
                               Edit Plan
                             </button>
 
                             {org.status === 'active' ? (
                               <button
+                                type="button"
                                 onClick={() => handleStatusChange(org._id, 'suspended')}
-                                className="px-3 py-1.5 text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-lg transition"
+                                className="px-3 py-1.5 text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 rounded-xl transition cursor-pointer border border-rose-200/60"
                               >
                                 Suspend
                               </button>
                             ) : (
                               <button
+                                type="button"
                                 onClick={() => handleStatusChange(org._id, 'active')}
-                                className="px-3 py-1.5 text-xs font-bold text-emerald-600 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition"
+                                className="px-3 py-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-xl transition cursor-pointer border border-emerald-200/60"
                               >
                                 Activate
                               </button>
@@ -613,55 +693,55 @@ export default function SuperAdminDashboard() {
           </div>
         )}
 
-        {/* ════════════════════════════════════════════════════════════════ */}
-        {/* SCREEN 3: PAYMENTS & RAZORPAY LEDGER */}
-        {/* ════════════════════════════════════════════════════════════════ */}
+        {/* ========================================================================= */}
+        {/* SCREEN 3: PAYMENTS & RAZORPAY LEDGER                                       */}
+        {/* ========================================================================= */}
         {activeTab === 'payments' && (
           <div className="space-y-6">
-            {/* Razorpay Ledger Summary Banner */}
+            {/* Razorpay Ledger Summary Tiles */}
             <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-              <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-                <span className="text-xs font-bold text-slate-500 uppercase">Total Revenue</span>
-                <h4 className="text-2xl font-black text-emerald-600 mt-1">₹{paymentSummary.totalRevenue.toLocaleString('en-IN')}</h4>
+              <div className="bg-white p-5 rounded-3xl border border-slate-200/90 shadow-sm space-y-1">
+                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Total Revenue</span>
+                <h4 className="text-2xl font-extrabold text-emerald-700 font-mono">₹{paymentSummary.totalRevenue.toLocaleString('en-IN')}</h4>
               </div>
-              <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-                <span className="text-xs font-bold text-slate-500 uppercase">Successful Payments</span>
-                <h4 className="text-2xl font-black text-slate-900 mt-1">{paymentSummary.paidCount}</h4>
+              <div className="bg-white p-5 rounded-3xl border border-slate-200/90 shadow-sm space-y-1">
+                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Successful Payments</span>
+                <h4 className="text-2xl font-extrabold text-slate-900 font-mono">{paymentSummary.paidCount}</h4>
               </div>
-              <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-                <span className="text-xs font-bold text-slate-500 uppercase">Failed Attempts</span>
-                <h4 className="text-2xl font-black text-rose-600 mt-1">{paymentSummary.failedCount}</h4>
+              <div className="bg-white p-5 rounded-3xl border border-slate-200/90 shadow-sm space-y-1">
+                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Failed Attempts</span>
+                <h4 className="text-2xl font-extrabold text-rose-600 font-mono">{paymentSummary.failedCount}</h4>
               </div>
-              <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-                <span className="text-xs font-bold text-slate-500 uppercase">Avg Order Value</span>
-                <h4 className="text-2xl font-black text-indigo-600 mt-1">₹{paymentSummary.avgOrderValue.toLocaleString('en-IN')}</h4>
+              <div className="bg-white p-5 rounded-3xl border border-slate-200/90 shadow-sm space-y-1">
+                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Avg Order Value</span>
+                <h4 className="text-2xl font-extrabold text-blue-700 font-mono">₹{paymentSummary.avgOrderValue.toLocaleString('en-IN')}</h4>
               </div>
             </div>
 
             {/* Transactions Table */}
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-              <div className="p-5 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="bg-white rounded-3xl border border-slate-200/90 shadow-sm p-6 sm:p-7 space-y-6">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-100">
                 <div>
-                  <h2 className="text-lg font-bold text-slate-900">Razorpay Live Transaction Ledger</h2>
-                  <p className="text-xs text-slate-500">Every Razorpay payment processed for tenant subscriptions</p>
+                  <h2 className="text-lg font-bold text-slate-900 tracking-tight">Razorpay Live Transaction Ledger</h2>
+                  <p className="text-xs text-slate-500 font-medium">Every Razorpay payment processed for customer subscriptions</p>
                 </div>
 
-                <div className="flex items-center gap-3">
-                  <div className="relative">
-                    <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+                <div className="flex items-center gap-3 flex-wrap">
+                  <div className="relative w-full sm:w-64">
+                    <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
                     <input
                       type="text"
-                      placeholder="Search order ID, email..."
+                      placeholder="Search order ID, payment ID, email..."
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
-                      className="pl-9 pr-4 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 w-64"
+                      className="w-full pl-9 pr-4 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-medium"
                     />
                   </div>
 
                   <select
                     value={paymentStatusFilter}
                     onChange={(e) => setPaymentStatusFilter(e.target.value)}
-                    className="px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 font-semibold"
                   >
                     <option value="all">All Payment Status</option>
                     <option value="paid">Paid</option>
@@ -671,20 +751,20 @@ export default function SuperAdminDashboard() {
                 </div>
               </div>
 
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
+              <div className="overflow-x-auto rounded-2xl border border-slate-200/90">
+                <table className="w-full text-left text-xs border-collapse">
                   <thead>
-                    <tr className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider font-semibold border-b border-slate-200">
-                      <th className="py-3.5 px-6">Razorpay Order / Payment ID</th>
-                      <th className="py-3.5 px-6">Organization</th>
-                      <th className="py-3.5 px-6">Plan & Cycle</th>
-                      <th className="py-3.5 px-6">Amount</th>
-                      <th className="py-3.5 px-6">Date</th>
-                      <th className="py-3.5 px-6">Status</th>
-                      <th className="py-3.5 px-6 text-right">Receipt</th>
+                    <tr className="bg-slate-50 text-slate-700 font-bold uppercase tracking-wider text-[10px] border-b border-slate-200">
+                      <th className="py-3.5 px-5">Razorpay Order & Payment ID</th>
+                      <th className="py-3.5 px-5">Customer Organization</th>
+                      <th className="py-3.5 px-5">Plan & Billing Cycle</th>
+                      <th className="py-3.5 px-5">Amount Paid</th>
+                      <th className="py-3.5 px-5">Transaction Date</th>
+                      <th className="py-3.5 px-5">Status</th>
+                      <th className="py-3.5 px-5 text-right">Receipt Details</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-200 text-sm font-semibold">
+                  <tbody className="divide-y divide-slate-100 font-medium text-slate-800">
                     {filteredPayments.length === 0 ? (
                       <tr>
                         <td colSpan="7" className="py-12 text-center text-slate-400 font-normal">
@@ -693,60 +773,61 @@ export default function SuperAdminDashboard() {
                       </tr>
                     ) : (
                       filteredPayments.map((pay) => (
-                        <tr key={pay._id} className="hover:bg-slate-50 transition">
-                          <td className="py-4 px-6 font-mono text-xs">
+                        <tr key={pay._id} className="hover:bg-slate-50/80 transition">
+                          <td className="py-4 px-5 font-mono text-xs">
                             <div className="text-slate-900 font-bold">{pay.razorpayOrderId}</div>
                             <div className="text-slate-400 text-[11px]">{pay.razorpayPaymentId || 'N/A'}</div>
                           </td>
 
-                          <td className="py-4 px-6">
+                          <td className="py-4 px-5">
                             <div className="text-slate-900 font-bold">
                               {pay.organization?.name || pay.notes?.companyName || 'SaaS Customer'}
                             </div>
-                            <div className="text-xs text-slate-500 font-normal">
+                            <div className="text-[11px] text-slate-500 font-medium">
                               {pay.organization?.email || pay.notes?.userEmail || ''}
                             </div>
                           </td>
 
-                          <td className="py-4 px-6">
-                            <span className="uppercase text-xs font-extrabold px-2.5 py-0.5 rounded bg-slate-100 text-slate-700">
+                          <td className="py-4 px-5">
+                            <span className="uppercase text-xs font-bold px-2.5 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200">
                               {pay.plan} ({pay.billingCycle || 'monthly'})
                             </span>
                           </td>
 
-                          <td className="py-4 px-6 font-black text-emerald-600">
+                          <td className="py-4 px-5 font-mono font-extrabold text-emerald-700 text-sm">
                             ₹{pay.amount.toLocaleString('en-IN')}
                           </td>
 
-                          <td className="py-4 px-6 text-xs text-slate-500 font-normal">
+                          <td className="py-4 px-5 text-xs text-slate-500 font-medium">
                             {new Date(pay.createdAt).toLocaleString('en-IN')}
                           </td>
 
-                          <td className="py-4 px-6">
+                          <td className="py-4 px-5">
                             {pay.status === 'paid' && (
-                              <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
-                                Paid
+                              <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 inline-flex items-center gap-1">
+                                <CheckCircle2 className="w-3.5 h-3.5" /> Paid
                               </span>
                             )}
                             {pay.status === 'created' && (
-                              <span className="px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-300">
-                                Pending
+                              <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200 inline-flex items-center gap-1">
+                                <Clock className="w-3.5 h-3.5" /> Pending
                               </span>
                             )}
                             {pay.status === 'failed' && (
-                              <span className="px-3 py-1 rounded-full text-xs font-bold bg-rose-100 text-rose-800 border border-rose-300">
-                                Failed
+                              <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200 inline-flex items-center gap-1">
+                                <XCircle className="w-3.5 h-3.5" /> Failed
                               </span>
                             )}
                           </td>
 
-                          <td className="py-4 px-6 text-right">
+                          <td className="py-4 px-5 text-right">
                             <button
+                              type="button"
                               onClick={() => {
                                 setSelectedReceipt(pay);
                                 setShowReceiptModal(true);
                               }}
-                              className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition"
+                              className="p-2 text-blue-600 hover:bg-blue-50 rounded-xl transition cursor-pointer border border-blue-200/60"
                               title="View Payment Receipt Details"
                             >
                               <Eye className="w-4 h-4" />
@@ -762,267 +843,277 @@ export default function SuperAdminDashboard() {
           </div>
         )}
 
-        {/* ════════════════════════════════════════════════════════════════ */}
-        {/* SCREEN 4: PRICING PLANS CONTROL */}
-        {/* ════════════════════════════════════════════════════════════════ */}
+        {/* ========================================================================= */}
+        {/* SCREEN 4: PRICING PLANS CONTROL                                           */}
+        {/* ========================================================================= */}
         {activeTab === 'plans' && (
           <div className="space-y-6">
-            <div className="bg-amber-50 border border-amber-200 p-4 rounded-2xl flex items-center justify-between text-amber-900 text-xs font-bold">
-              <div className="flex items-center gap-2">
-                <ShieldAlert className="w-5 h-5 text-amber-600 flex-shrink-0" />
+            <div className="bg-blue-50/80 border border-blue-200/80 p-4 rounded-3xl flex items-center justify-between text-blue-900 text-xs font-semibold">
+              <div className="flex items-center gap-2.5">
+                <ShieldAlert className="w-5 h-5 text-blue-600 shrink-0" />
                 <span>
-                  Subscription Access Enforcement: Direct Razorpay Paid Subscriptions ONLY. (Zero Day Access Trial Policy Enforced).
+                  Direct Subscription Policy Enforced: Organizations get instant access upon Razorpay payment confirmation.
                 </span>
               </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              
               {/* Starter Plan */}
-              <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col justify-between space-y-5">
+              <div className="bg-white p-6 rounded-3xl border border-slate-200/90 shadow-sm flex flex-col justify-between space-y-6 hover:shadow-md transition">
                 <div>
-                  <span className="px-3 py-1 bg-slate-100 text-slate-700 text-xs font-extrabold rounded-full uppercase">
+                  <span className="px-3 py-1 bg-slate-100 text-slate-700 text-xs font-bold rounded-full uppercase border border-slate-200">
                     Starter Plan
                   </span>
-                  <div className="mt-4 text-3xl font-black text-slate-900">
+                  <div className="mt-4 text-3xl font-extrabold text-slate-900 font-mono">
                     ₹999 <span className="text-xs font-normal text-slate-500">/ month</span>
                   </div>
-                  <p className="text-xs text-slate-500 font-semibold mt-1">Ideal for small field teams</p>
-                  <ul className="mt-4 space-y-2 text-xs font-semibold text-slate-600">
+                  <p className="text-xs text-slate-500 font-medium mt-1">Ideal for small field teams starting out</p>
+                  <ul className="mt-5 space-y-2.5 text-xs font-semibold text-slate-700">
                     <li className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-600" /> Up to 10 Employee Accounts</li>
+                    <li className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-600" /> 3 Manager Accounts</li>
                     <li className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-600" /> Live GPS Location Telemetry</li>
                     <li className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-600" /> Selfie Geofenced Attendance</li>
                   </ul>
                 </div>
 
-                <div className="pt-4 border-t border-slate-100 flex items-center justify-between text-xs font-bold text-slate-500">
+                <div className="pt-4 border-t border-slate-100 flex items-center justify-between text-xs font-bold text-slate-600">
                   <span>Quota: 10 Seats</span>
-                  <span className="text-emerald-600">Razorpay Active</span>
+                  <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">Razorpay Active</span>
                 </div>
               </div>
 
               {/* Growth Pro Plan */}
-              <div className="bg-gradient-to-b from-indigo-50 to-white p-6 rounded-3xl border-2 border-indigo-500 shadow-md flex flex-col justify-between space-y-5 relative">
-                <div className="absolute -top-3 right-6 bg-indigo-600 text-white text-[10px] font-black uppercase px-3 py-1 rounded-full shadow">
+              <div className="bg-gradient-to-b from-blue-50/60 to-white p-6 rounded-3xl border-2 border-blue-500 shadow-md flex flex-col justify-between space-y-6 relative">
+                <div className="absolute -top-3 right-6 bg-blue-600 text-white text-[10px] font-extrabold uppercase px-3 py-1 rounded-full shadow-sm">
                   Most Popular
                 </div>
 
                 <div>
-                  <span className="px-3 py-1 bg-indigo-100 text-indigo-700 text-xs font-extrabold rounded-full uppercase">
+                  <span className="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-bold rounded-full uppercase border border-blue-200">
                     Growth Pro Plan
                   </span>
-                  <div className="mt-4 text-3xl font-black text-slate-900">
-                    ₹2,999 <span className="text-xs font-normal text-slate-500">/ month</span>
+                  <div className="mt-4 text-3xl font-extrabold text-slate-900 font-mono">
+                    ₹1,999 <span className="text-xs font-normal text-slate-500">/ month</span>
                   </div>
-                  <p className="text-xs text-indigo-900 font-semibold mt-1">For growing medium enterprises</p>
-                  <ul className="mt-4 space-y-2 text-xs font-semibold text-slate-700">
-                    <li className="flex items-center gap-2"><Check className="w-4 h-4 text-indigo-600" /> Up to 50 Employee Accounts</li>
-                    <li className="flex items-center gap-2"><Check className="w-4 h-4 text-indigo-600" /> 1-Second Live High Precision GPS</li>
-                    <li className="flex items-center gap-2"><Check className="w-4 h-4 text-indigo-600" /> OCR Fuel Expense Audits</li>
-                    <li className="flex items-center gap-2"><Check className="w-4 h-4 text-indigo-600" /> Client Visit Management</li>
+                  <p className="text-xs text-blue-900 font-medium mt-1">For growing medium enterprises needing audit tools</p>
+                  <ul className="mt-5 space-y-2.5 text-xs font-semibold text-slate-700">
+                    <li className="flex items-center gap-2"><Check className="w-4 h-4 text-blue-600" /> Up to 30 Employee Accounts</li>
+                    <li className="flex items-center gap-2"><Check className="w-4 h-4 text-blue-600" /> 10 Manager Accounts</li>
+                    <li className="flex items-center gap-2"><Check className="w-4 h-4 text-blue-600" /> Live High Precision GPS Replay</li>
+                    <li className="flex items-center gap-2"><Check className="w-4 h-4 text-blue-600" /> OCR Fuel Expense Audits</li>
                   </ul>
                 </div>
 
-                <div className="pt-4 border-t border-indigo-100 flex items-center justify-between text-xs font-bold text-indigo-900">
-                  <span>Quota: 50 Seats</span>
-                  <span className="text-emerald-600">Razorpay Active</span>
+                <div className="pt-4 border-t border-blue-100 flex items-center justify-between text-xs font-bold text-blue-900">
+                  <span>Quota: 30 Seats</span>
+                  <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">Razorpay Active</span>
                 </div>
               </div>
 
               {/* Enterprise Plan */}
-              <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col justify-between space-y-5">
+              <div className="bg-white p-6 rounded-3xl border border-slate-200/90 shadow-sm flex flex-col justify-between space-y-6 hover:shadow-md transition">
                 <div>
-                  <span className="px-3 py-1 bg-purple-100 text-purple-700 text-xs font-extrabold rounded-full uppercase">
+                  <span className="px-3 py-1 bg-purple-100 text-purple-700 text-xs font-bold rounded-full uppercase border border-purple-200">
                     Enterprise Plan
                   </span>
-                  <div className="mt-4 text-3xl font-black text-slate-900">
-                    ₹7,999 <span className="text-xs font-normal text-slate-500">/ month</span>
+                  <div className="mt-4 text-3xl font-extrabold text-slate-900 font-mono">
+                    ₹3,999 <span className="text-xs font-normal text-slate-500">/ month</span>
                   </div>
-                  <p className="text-xs text-slate-500 font-semibold mt-1">Large scale corporate fleets</p>
-                  <ul className="mt-4 space-y-2 text-xs font-semibold text-slate-600">
-                    <li className="flex items-center gap-2"><Check className="w-4 h-4 text-purple-600" /> 500+ Employee Capacity</li>
-                    <li className="flex items-center gap-2"><Check className="w-4 h-4 text-purple-600" /> Dedicated Database & Cloud SLA</li>
-                    <li className="flex items-center gap-2"><Check className="w-4 h-4 text-purple-600" /> Custom API & Telegram Bots</li>
+                  <p className="text-xs text-slate-500 font-medium mt-1">High capacity operations requiring multi-tier squad hierarchy</p>
+                  <ul className="mt-5 space-y-2.5 text-xs font-semibold text-slate-700">
+                    <li className="flex items-center gap-2"><Check className="w-4 h-4 text-purple-600" /> 50 Employee Accounts</li>
+                    <li className="flex items-center gap-2"><Check className="w-4 h-4 text-purple-600" /> 20 Manager Accounts</li>
+                    <li className="flex items-center gap-2"><Check className="w-4 h-4 text-purple-600" /> Dedicated Account Manager</li>
+                    <li className="flex items-center gap-2"><Check className="w-4 h-4 text-purple-600" /> Custom SLA & 24/7 Phone Support</li>
                   </ul>
                 </div>
 
-                <div className="pt-4 border-t border-slate-100 flex items-center justify-between text-xs font-bold text-slate-500">
-                  <span>Quota: 500 Seats</span>
-                  <span className="text-emerald-600">Razorpay Active</span>
+                <div className="pt-4 border-t border-slate-100 flex items-center justify-between text-xs font-bold text-slate-600">
+                  <span>Quota: 50 Seats</span>
+                  <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">Razorpay Active</span>
                 </div>
               </div>
+
             </div>
           </div>
         )}
 
-        {/* ════════════════════════════════════════════════════════════════ */}
-        {/* SCREEN 5: SYSTEM SETTINGS & GATEWAY STATUS */}
-        {/* ════════════════════════════════════════════════════════════════ */}
-        {activeTab === 'settings' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Razorpay Gateway Live Card */}
-            <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
-                  <CreditCard className="w-6 h-6" />
-                </div>
-                <div>
-                  <h3 className="text-base font-bold text-slate-900">Razorpay Live API Integration</h3>
-                  <span className="text-xs text-emerald-600 font-bold">Operational • Live Account</span>
-                </div>
-              </div>
 
-              <div className="space-y-3 bg-slate-50 p-4 rounded-2xl border border-slate-200 text-xs font-semibold">
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Key ID:</span>
-                  <span className="font-mono font-bold text-slate-900">rzp_live_TNdSmDOKSX2g6I</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">HMAC SHA256 Signature Verification:</span>
-                  <span className="font-bold text-emerald-600">ENFORCED</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Currency:</span>
-                  <span className="font-bold text-slate-900">INR (Indian Rupee)</span>
-                </div>
-              </div>
-            </div>
 
-            {/* Platform Control & Support */}
-            <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold">
-                  <PhoneCall className="w-6 h-6" />
-                </div>
-                <div>
-                  <h3 className="text-base font-bold text-slate-900">Platform Support & Hotline</h3>
-                  <span className="text-xs text-slate-500 font-medium">Customer Service Contact</span>
-                </div>
-              </div>
-
-              <div className="space-y-3 bg-slate-50 p-4 rounded-2xl border border-slate-200 text-xs font-semibold">
-                <div className="flex justify-between items-center">
-                  <span className="text-slate-500">Support Phone:</span>
-                  <a href="tel:9511450914" className="font-black text-indigo-600 hover:underline text-sm">
-                    +91 9511450914
-                  </a>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Multi-Tenant Isolation:</span>
-                  <span className="font-bold text-emerald-600">ACTIVE</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Access Mode:</span>
-                  <span className="font-bold text-slate-900">Organization Registration Only</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ════════════════════════════════════════════════════════════════ */}
-        {/* MODAL 1: ADD ORGANIZATION MODAL */}
-        {/* ════════════════════════════════════════════════════════════════ */}
+        {/* ========================================================================= */}
+        {/* MODAL 1: ADD NEW ORGANIZATION                                             */}
+        {/* ========================================================================= */}
         {showCreateModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
-            <div className="bg-white rounded-3xl max-w-xl w-full p-6 shadow-2xl space-y-5 border border-slate-200">
-              <div className="flex items-center justify-between border-b pb-4">
-                <div>
-                  <h3 className="text-lg font-bold text-slate-900">Onboard Organization</h3>
-                  <p className="text-xs text-slate-500">Manual tenant creation for Super Admin</p>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-in fade-in">
+            <div className="bg-white rounded-3xl max-w-xl w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
+              <div className="p-5 border-b border-slate-100 flex items-center justify-between flex-shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
+                    <Building2 className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-slate-900">Add New Customer Organization</h3>
+                    <p className="text-xs text-slate-500">Create tenant account and initialize Super Admin login</p>
+                  </div>
                 </div>
-                <button onClick={() => setShowCreateModal(false)} className="text-slate-400 hover:text-slate-600">✕</button>
+                <button
+                  type="button"
+                  onClick={() => setShowCreateModal(false)}
+                  className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                >
+                  <X className="w-5 h-5" />
+                </button>
               </div>
 
-              <form onSubmit={handleCreateOrg} className="space-y-4 text-sm font-semibold">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs text-slate-700 mb-1">Company Name</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="Kisan Choice Agro"
-                      value={formData.name}
-                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      className="w-full p-2.5 border rounded-xl focus:ring-2 focus:ring-indigo-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-slate-700 mb-1">Company Email</label>
-                    <input
-                      type="email"
-                      required
-                      placeholder="admin@kisanchoice.com"
-                      value={formData.email}
-                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                      className="w-full p-2.5 border rounded-xl focus:ring-2 focus:ring-indigo-500"
-                    />
-                  </div>
-                </div>
+              <form onSubmit={handleCreateOrg} className="flex flex-col flex-1 overflow-hidden min-h-0">
+                <div className="p-6 overflow-y-auto space-y-4 text-xs flex-1">
+                  
+                  {/* Org Details */}
+                  <div className="space-y-3">
+                    <h4 className="font-bold text-blue-700 uppercase tracking-wider text-[11px]">Organization Details</h4>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block font-semibold text-slate-700 mb-1">Organization Name *</label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="e.g. Kisan Digital Ltd"
+                          value={formData.name}
+                          onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                          className="w-full p-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 text-xs"
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-semibold text-slate-700 mb-1">Organization Email *</label>
+                        <input
+                          type="email"
+                          required
+                          placeholder="contact@company.com"
+                          value={formData.email}
+                          onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                          className="w-full p-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 text-xs"
+                        />
+                      </div>
+                    </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs text-slate-700 mb-1">Phone</label>
-                    <input
-                      type="text"
-                      placeholder="+91 9511450914"
-                      value={formData.phone}
-                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                      className="w-full p-2.5 border rounded-xl focus:ring-2 focus:ring-indigo-500"
-                    />
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block font-semibold text-slate-700 mb-1">Phone Number</label>
+                        <input
+                          type="text"
+                          placeholder="+91 9876543210"
+                          value={formData.phone}
+                          onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                          className="w-full p-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 text-xs"
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-semibold text-slate-700 mb-1">Office Address</label>
+                        <input
+                          type="text"
+                          placeholder="City, State"
+                          value={formData.address}
+                          onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                          className="w-full p-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 text-xs"
+                        />
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-xs text-slate-700 mb-1">Subscription Plan</label>
-                    <select
-                      value={formData.planName}
-                      onChange={(e) => setFormData({ ...formData, planName: e.target.value })}
-                      className="w-full p-2.5 border rounded-xl focus:ring-2 focus:ring-indigo-500"
-                    >
-                      <option value="Starter Plan">Starter Plan (10 Emp)</option>
-                      <option value="Growth Pro Plan">Growth Pro Plan (50 Emp)</option>
-                      <option value="Enterprise Plan">Enterprise Plan (500 Emp)</option>
-                    </select>
-                  </div>
-                </div>
 
-                <div className="border-t pt-3">
-                  <h4 className="text-xs uppercase text-slate-500 font-bold mb-2">Admin Login Credentials</h4>
-                  <div className="grid grid-cols-2 gap-4">
+                  {/* Initial Admin Credentials */}
+                  <div className="space-y-3 pt-2 border-t border-slate-100">
+                    <h4 className="font-bold text-blue-700 uppercase tracking-wider text-[11px]">Primary Admin Credentials</h4>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block font-semibold text-slate-700 mb-1">Admin Full Name *</label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="Ramesh Kumar"
+                          value={formData.adminName}
+                          onChange={(e) => setFormData({ ...formData, adminName: e.target.value })}
+                          className="w-full p-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 text-xs"
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-semibold text-slate-700 mb-1">Admin Email *</label>
+                        <input
+                          type="email"
+                          required
+                          placeholder="admin@company.com"
+                          value={formData.adminEmail}
+                          onChange={(e) => setFormData({ ...formData, adminEmail: e.target.value })}
+                          className="w-full p-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 text-xs"
+                        />
+                      </div>
+                    </div>
+
                     <div>
-                      <label className="block text-xs text-slate-700 mb-1">Admin Password</label>
+                      <label className="block font-semibold text-slate-700 mb-1">Admin Initial Password *</label>
                       <input
                         type="password"
                         required
                         placeholder="••••••••"
                         value={formData.adminPassword}
                         onChange={(e) => setFormData({ ...formData, adminPassword: e.target.value })}
-                        className="w-full p-2.5 border rounded-xl focus:ring-2 focus:ring-indigo-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-slate-700 mb-1">Max Employee Limit</label>
-                      <input
-                        type="number"
-                        value={formData.maxEmployees}
-                        onChange={(e) => setFormData({ ...formData, maxEmployees: Number(e.target.value) })}
-                        className="w-full p-2.5 border rounded-xl focus:ring-2 focus:ring-indigo-500"
+                        className="w-full p-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 text-xs"
                       />
                     </div>
                   </div>
+
+                  {/* Subscription Plan & Seat Quotas */}
+                  <div className="space-y-3 pt-2 border-t border-slate-100">
+                    <h4 className="font-bold text-blue-700 uppercase tracking-wider text-[11px]">Subscription Plan & Quotas</h4>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div>
+                        <label className="block font-semibold text-slate-700 mb-1">Plan Tier</label>
+                        <select
+                          value={formData.planName}
+                          onChange={(e) => setFormData({ ...formData, planName: e.target.value })}
+                          className="w-full p-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 text-xs font-semibold"
+                        >
+                          <option value="Starter Plan">Starter Plan (10 seats)</option>
+                          <option value="Growth Pro Plan">Growth Pro Plan (50 seats)</option>
+                          <option value="Enterprise Plan">Enterprise Plan (500 seats)</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block font-semibold text-slate-700 mb-1">Max Employees</label>
+                        <input
+                          type="number"
+                          value={formData.maxEmployees}
+                          onChange={(e) => setFormData({ ...formData, maxEmployees: Number(e.target.value) })}
+                          className="w-full p-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 text-xs font-semibold"
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-semibold text-slate-700 mb-1">Max Managers</label>
+                        <input
+                          type="number"
+                          value={formData.maxManagers}
+                          onChange={(e) => setFormData({ ...formData, maxManagers: Number(e.target.value) })}
+                          className="w-full p-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 text-xs font-semibold"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
                 </div>
 
-                <div className="flex justify-end gap-3 pt-4 border-t">
+                <div className="p-4 bg-slate-50 border-t border-slate-200 flex justify-end gap-3 flex-shrink-0">
                   <button
                     type="button"
                     onClick={() => setShowCreateModal(false)}
-                    className="px-4 py-2 border rounded-xl text-slate-600 hover:bg-slate-50"
+                    className="px-4 py-2 border border-slate-200 rounded-xl font-semibold text-slate-600 hover:bg-slate-100"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    className="px-5 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 font-bold shadow-md"
+                    className="px-5 py-2 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 shadow-md shadow-blue-500/20"
                   >
-                    Onboard Organization
+                    Create Organization Account
                   </button>
                 </div>
               </form>
@@ -1030,65 +1121,77 @@ export default function SuperAdminDashboard() {
           </div>
         )}
 
-        {/* ════════════════════════════════════════════════════════════════ */}
-        {/* MODAL 2: EDIT SUBSCRIPTION MODAL */}
-        {/* ════════════════════════════════════════════════════════════════ */}
+        {/* ========================================================================= */}
+        {/* MODAL 2: EDIT SUBSCRIPTION PLAN & QUOTA                                  */}
+        {/* ========================================================================= */}
         {showSubscriptionModal && selectedOrg && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
-            <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-5 border border-slate-200">
-              <div className="flex items-center justify-between border-b pb-4">
-                <div>
-                  <h3 className="text-lg font-bold text-slate-900">Update Subscription</h3>
-                  <p className="text-xs text-slate-500">For {selectedOrg.name}</p>
-                </div>
-                <button onClick={() => setShowSubscriptionModal(false)} className="text-slate-400 hover:text-slate-600">✕</button>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-in fade-in">
+            <div className="bg-white rounded-3xl max-w-md w-full shadow-2xl border border-slate-200 p-6 space-y-4">
+              <div className="flex items-center justify-between border-b pb-3">
+                <h3 className="text-base font-bold text-slate-900">Update Subscription: {selectedOrg.name}</h3>
+                <button type="button" onClick={() => setShowSubscriptionModal(false)} className="text-slate-400 hover:text-slate-600">
+                  <X className="w-5 h-5" />
+                </button>
               </div>
 
-              <form onSubmit={handleUpdateSubscription} className="space-y-4 text-sm font-semibold">
+              <form onSubmit={handleUpdateSubscription} className="space-y-4 text-xs">
                 <div>
-                  <label className="block text-xs text-slate-700 mb-1">Plan Title</label>
-                  <input
-                    type="text"
+                  <label className="block font-semibold text-slate-700 mb-1">Plan Tier</label>
+                  <select
                     value={subData.planName}
                     onChange={(e) => setSubData({ ...subData, planName: e.target.value })}
-                    className="w-full p-2.5 border rounded-xl focus:ring-2 focus:ring-indigo-500"
-                  />
+                    className="w-full p-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 font-semibold"
+                  >
+                    <option value="Starter Plan">Starter Plan</option>
+                    <option value="Growth Pro Plan">Growth Pro Plan</option>
+                    <option value="Enterprise Plan">Enterprise Plan</option>
+                  </select>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs text-slate-700 mb-1">Max Employee Limit</label>
+                    <label className="block font-semibold text-slate-700 mb-1">Max Employees</label>
                     <input
                       type="number"
                       value={subData.maxEmployees}
                       onChange={(e) => setSubData({ ...subData, maxEmployees: Number(e.target.value) })}
-                      className="w-full p-2.5 border rounded-xl focus:ring-2 focus:ring-indigo-500"
+                      className="w-full p-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 font-bold"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs text-slate-700 mb-1">Extend Access (Days)</label>
+                    <label className="block font-semibold text-slate-700 mb-1">Max Managers</label>
                     <input
                       type="number"
-                      value={subData.addDays}
-                      onChange={(e) => setSubData({ ...subData, addDays: Number(e.target.value) })}
-                      className="w-full p-2.5 border rounded-xl focus:ring-2 focus:ring-indigo-500"
+                      value={subData.maxManagers}
+                      onChange={(e) => setSubData({ ...subData, maxManagers: Number(e.target.value) })}
+                      className="w-full p-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 font-bold"
                     />
                   </div>
                 </div>
 
-                <div className="flex justify-end gap-3 pt-4 border-t">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Extend Access (Days)</label>
+                  <input
+                    type="number"
+                    value={subData.addDays}
+                    onChange={(e) => setSubData({ ...subData, addDays: Number(e.target.value) })}
+                    className="w-full p-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 font-bold"
+                  />
+                </div>
+
+                <div className="flex justify-end gap-3 pt-3 border-t">
                   <button
                     type="button"
                     onClick={() => setShowSubscriptionModal(false)}
-                    className="px-4 py-2 border rounded-xl text-slate-600 hover:bg-slate-50"
+                    className="px-4 py-2 border rounded-xl font-semibold text-slate-600 hover:bg-slate-50"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    className="px-5 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 font-bold shadow-md"
+                    className="px-5 py-2 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 shadow-sm"
                   >
-                    Save & Renew Subscription
+                    Save Subscription Updates
                   </button>
                 </div>
               </form>
@@ -1096,51 +1199,54 @@ export default function SuperAdminDashboard() {
           </div>
         )}
 
-        {/* ════════════════════════════════════════════════════════════════ */}
-        {/* MODAL 3: RECEIPT MODAL */}
-        {/* ════════════════════════════════════════════════════════════════ */}
+        {/* ========================================================================= */}
+        {/* MODAL 3: PAYMENT RECEIPT DETAILS                                          */}
+        {/* ========================================================================= */}
         {showReceiptModal && selectedReceipt && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
-            <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-5 border border-slate-200">
-              <div className="flex items-center justify-between border-b pb-4">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-in fade-in">
+            <div className="bg-white rounded-3xl max-w-md w-full shadow-2xl border border-slate-200 p-6 space-y-4">
+              <div className="flex items-center justify-between border-b pb-3">
                 <div>
-                  <h3 className="text-lg font-bold text-slate-900">Razorpay Payment Receipt</h3>
-                  <p className="text-xs font-mono text-slate-500">{selectedReceipt.razorpayOrderId}</p>
+                  <h3 className="text-base font-bold text-slate-900">Razorpay Payment Receipt</h3>
+                  <p className="text-xs text-slate-500">Order #{selectedReceipt.razorpayOrderId}</p>
                 </div>
-                <button onClick={() => setShowReceiptModal(false)} className="text-slate-400 hover:text-slate-600">✕</button>
+                <button type="button" onClick={() => setShowReceiptModal(false)} className="text-slate-400 hover:text-slate-600">
+                  <X className="w-5 h-5" />
+                </button>
               </div>
 
-              <div className="space-y-3 text-xs font-semibold bg-slate-50 p-4 rounded-2xl border border-slate-200">
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Organization:</span>
-                  <span className="font-bold text-slate-900">
-                    {selectedReceipt.organization?.name || selectedReceipt.notes?.companyName || 'SaaS Customer'}
-                  </span>
-                </div>
+              <div className="space-y-3 bg-slate-50 p-4 rounded-2xl border border-slate-200 text-xs font-medium">
                 <div className="flex justify-between">
                   <span className="text-slate-500">Amount Paid:</span>
-                  <span className="font-black text-emerald-600 text-sm">
-                    ₹{selectedReceipt.amount.toLocaleString('en-IN')} INR
-                  </span>
+                  <strong className="text-emerald-700 font-mono font-bold text-sm">₹{selectedReceipt.amount.toLocaleString('en-IN')}</strong>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Customer Organization:</span>
+                  <strong className="text-slate-900 font-bold">{selectedReceipt.organization?.name || selectedReceipt.notes?.companyName || 'N/A'}</strong>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Customer Email:</span>
+                  <strong className="text-slate-900">{selectedReceipt.organization?.email || selectedReceipt.notes?.userEmail || 'N/A'}</strong>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-500">Razorpay Payment ID:</span>
-                  <span className="font-mono text-slate-900">{selectedReceipt.razorpayPaymentId || 'N/A'}</span>
+                  <strong className="font-mono text-slate-900">{selectedReceipt.razorpayPaymentId || 'N/A'}</strong>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-500">Status:</span>
-                  <span className="font-bold uppercase text-emerald-600">{selectedReceipt.status}</span>
+                  <span className="text-slate-500">Transaction Status:</span>
+                  <strong className="uppercase font-bold text-emerald-700">{selectedReceipt.status}</strong>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-500">Paid At:</span>
-                  <span>{new Date(selectedReceipt.createdAt).toLocaleString('en-IN')}</span>
+                  <span className="text-slate-500">Transaction Date:</span>
+                  <strong className="text-slate-900">{new Date(selectedReceipt.createdAt).toLocaleString('en-IN')}</strong>
                 </div>
               </div>
 
               <div className="flex justify-end pt-2">
                 <button
+                  type="button"
                   onClick={() => setShowReceiptModal(false)}
-                  className="px-5 py-2 bg-slate-900 text-white rounded-xl font-bold"
+                  className="px-5 py-2 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800"
                 >
                   Close Receipt
                 </button>
@@ -1148,6 +1254,7 @@ export default function SuperAdminDashboard() {
             </div>
           </div>
         )}
+
       </div>
     </KisanConnectLayout>
   );

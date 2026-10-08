@@ -101,15 +101,15 @@ export default function KisanConnectLayout({ children }) {
 
       {/* KisanConnect Sidebar */}
       <aside
-        className={`fixed top-0 left-0 bottom-0 w-72 bg-white border-r-2 border-rose-200/90 shadow-sm shadow-rose-100/40 z-50 flex flex-col justify-between transition-transform duration-200 ease-in-out print:hidden ${
+        className={`fixed top-0 left-0 bottom-0 w-72 bg-white border-r border-slate-200/90 shadow-sm z-50 flex flex-col justify-between transition-transform duration-200 ease-in-out print:hidden ${
           mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
         } lg:translate-x-0`}
       >
         <div className="flex flex-col flex-1 min-h-0">
-          {/* Logo & Brand Header (Super Company Brand) */}
-          <div className="h-16 px-5 flex items-center justify-between border-b border-rose-100 bg-white">
+          {/* Logo & Brand Header */}
+          <div className="h-16 px-4 flex items-center justify-between border-b border-slate-100 bg-white flex-shrink-0">
             <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-10 h-10 rounded-xl overflow-hidden border border-rose-200/80 shadow-xs bg-white flex-shrink-0 flex items-center justify-center p-0.5">
+              <div className="w-9 h-9 rounded-xl overflow-hidden border border-rose-200/80 shadow-2xs bg-white flex-shrink-0 flex items-center justify-center p-0.5">
                 {organization?.logo ? (
                   <img
                     src='/images/icon.jpg'
@@ -125,11 +125,11 @@ export default function KisanConnectLayout({ children }) {
                   {orgName ? orgName.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase() : 'KC'}
                 </div>
               </div>
-              <div className="min-w-0 flex flex-col justify-center">
+              <div className="min-w-0 flex items-center">
                 <img
                   src="/images/superCompanyLOGO.png"
                   alt="Super Company Logo"
-                  className="h-20  w-auto object-contain"
+                  className="h-20 max-h-20 w-auto object-contain"
                   onError={(e) => {
                     e.target.onerror = null;
                     e.target.src = '/images/kisanLogo.jpg';
@@ -137,17 +137,17 @@ export default function KisanConnectLayout({ children }) {
                 />
               </div>
             </div>
-            <button className="lg:hidden text-slate-400 p-1 hover:text-rose-500" onClick={() => setMobileMenuOpen(false)}>
+            <button className="lg:hidden text-slate-400 p-1.5 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition" onClick={() => setMobileMenuOpen(false)}>
               <X className="w-5 h-5" />
             </button>
           </div>
 
           {/* Navigation Links */}
-          <nav className="flex-1 px-3 py-2.5 space-y-1 overflow-y-auto mt-[10px]">
+          <nav className="flex-1 px-3.5 py-4 space-y-1.5 overflow-y-auto">
             {isSuperAdmin ? (
-              <div className="space-y-1">
-                <div className="px-3 pb-1.5 text-[10px] font-black text-rose-600 uppercase tracking-wider flex items-center gap-1.5">
-                  <Shield className="w-3.5 h-3.5" /> Super Admin Console
+              <div className="space-y-1.5">
+                <div className="px-3 pb-2 text-[10px] font-bold text-rose-600 uppercase tracking-wider flex items-center gap-2">
+                  <Shield className="w-3.5 h-3.5 text-rose-500" /> Super Admin Console
                 </div>
 
                 {[
@@ -172,13 +172,13 @@ export default function KisanConnectLayout({ children }) {
                       to={item.to}
                       end={item.end}
                       onClick={() => setMobileMenuOpen(false)}
-                      className={`flex items-center gap-2.5 py-2 px-3 rounded-xl text-[15px] transition-all duration-150 group ${
+                      className={`flex items-center gap-3 py-2.5 px-3.5 rounded-xl text-[14px] transition-all duration-150 group ${
                         isActive
-                          ? 'bg-rose-50 text-rose-600 font-bold border-l-4 border-rose-500 pl-3.5 shadow-sm'
-                          : 'text-slate-700 font-medium hover:bg-rose-50/60 hover:text-rose-600 pl-3.5 hover:border-l-4 hover:border-rose-300'
+                          ? 'bg-rose-50/90 text-rose-700 font-bold border border-rose-200/80 shadow-2xs'
+                          : 'text-slate-600 font-medium hover:bg-slate-50 hover:text-slate-900 border border-transparent'
                       }`}
                     >
-                      <Icon className={`w-5 h-5 flex-shrink-0 transition-colors ${isActive ? 'text-rose-600 stroke-[2.2]' : 'text-slate-500 group-hover:text-rose-500 stroke-[1.8]'}`} />
+                      <Icon className={`w-4 h-4 flex-shrink-0 transition-colors ${isActive ? 'text-rose-600 stroke-[2.2]' : 'text-slate-400 group-hover:text-slate-600 stroke-[1.8]'}`} />
                       <span className="tracking-tight">{item.label}</span>
                     </NavLink>
                   );
@@ -196,16 +196,16 @@ export default function KisanConnectLayout({ children }) {
                     key={item.to}
                     to={item.to}
                     onClick={() => setMobileMenuOpen(false)}
-                    className={`flex items-center gap-2.5 py-2.5 px-3 rounded-xl text-[15px] transition-all duration-150 group ${
+                    className={`flex items-center gap-3 py-2.5 px-3.5 rounded-xl text-[14px] transition-all duration-150 group ${
                       isActive
-                        ? 'bg-rose-50 text-rose-600 font-bold border-l-4 border-rose-500 pl-3.5 shadow-sm'
-                        : 'text-slate-700 font-medium hover:bg-rose-50/60 hover:text-rose-600 pl-3.5 hover:border-l-4 hover:border-rose-300'
+                        ? 'bg-rose-50/90 text-rose-700 font-bold border border-rose-200/80 shadow-2xs'
+                        : 'text-slate-600 font-medium hover:bg-slate-50 hover:text-slate-900 border border-transparent'
                     }`}
                   >
-                    <Icon className={`w-5 h-5 flex-shrink-0 transition-colors ${isActive ? 'text-rose-600 stroke-[2.2]' : 'text-slate-500 group-hover:text-rose-500 stroke-[1.8]'}`} />
+                    <Icon className={`w-4 h-4 flex-shrink-0 transition-colors ${isActive ? 'text-rose-600 stroke-[2.2]' : 'text-slate-400 group-hover:text-slate-600 stroke-[1.8]'}`} />
                     <span className="tracking-tight">{item.label}</span>
                     {item.isBilling && !isPlanActive && isOrgAdmin && (
-                      <span className="ml-auto text-[9px] font-black uppercase tracking-wider bg-rose-600 text-white px-1.5 py-0.5 rounded-full shadow-xs animate-pulse">
+                      <span className="ml-auto text-[9px] font-extrabold uppercase tracking-wider bg-rose-600 text-white px-2 py-0.5 rounded-full shadow-2xs animate-pulse">
                         Unpaid
                       </span>
                     )}
@@ -216,31 +216,31 @@ export default function KisanConnectLayout({ children }) {
           </nav>
         </div>
 
-        {/* Bottom Sidebar: Organization Switcher or SuperAdmin Badge & User Profile */}
-        <div className="p-3 border-t border-rose-100 space-y-2 bg-white">
+        {/* Bottom Sidebar: Organization Switcher / SuperAdmin Badge & User Profile */}
+        <div className="p-3.5 border-t border-slate-100 space-y-2.5 bg-slate-50/50 flex-shrink-0">
           {isSuperAdmin ? (
             /* Super Admin Status Card */
-            <div className="p-2.5 bg-gradient-to-r from-rose-50 to-indigo-50 border border-rose-200 rounded-xl flex items-center justify-between shadow-sm">
-              <div className="flex items-center gap-2 min-w-0">
-                <div className="w-7 h-7 rounded-lg bg-rose-600 text-white flex items-center justify-center font-black text-xs shadow-xs flex-shrink-0">
-                  <Shield className="w-3.5 h-3.5" />
+            <div className="p-3 bg-white border border-rose-200/80 rounded-2xl flex items-center justify-between shadow-2xs">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-rose-500 to-rose-600 text-white flex items-center justify-center font-bold text-xs shadow-2xs flex-shrink-0">
+                  <Shield className="w-4 h-4" />
                 </div>
                 <div className="min-w-0">
-                  <span className="text-[9px] font-black uppercase text-rose-700 tracking-wider block">Super Admin</span>
-                  <span className="text-[11px] font-bold text-slate-800 truncate block">Master Platform Control</span>
+                  <span className="text-[10px] font-bold uppercase text-rose-700 tracking-wider block">SUPER ADMIN</span>
+                  <span className="text-xs font-bold text-slate-800 truncate block">Master Platform Control</span>
                 </div>
               </div>
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse flex-shrink-0" title="Active Master Session" />
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse flex-shrink-0 border-2 border-white shadow-2xs" title="Active Master Session" />
             </div>
           ) : (
             /* Organization Switcher Card for Tenant Users */
             <div className="relative">
               <button
                 onClick={() => setShowOrgDropdown(!showOrgDropdown)}
-                className="w-full flex items-center justify-between p-2.5 rounded-xl border border-rose-200 bg-rose-50/40 hover:bg-rose-50 hover:border-rose-400 text-left transition duration-150 shadow-xs cursor-pointer"
+                className="w-full flex items-center justify-between p-2.5 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-left transition duration-150 shadow-2xs cursor-pointer"
               >
                 <div className="flex items-center gap-2.5 min-w-0">
-                  <div className="w-8 h-8 rounded-lg bg-white text-rose-700 flex items-center justify-center font-bold text-xs flex-shrink-0 overflow-hidden border border-rose-200 p-0.5 shadow-xs">
+                  <div className="w-8 h-8 rounded-xl bg-white text-rose-700 flex items-center justify-center font-bold text-xs flex-shrink-0 overflow-hidden border border-rose-200 p-0.5 shadow-2xs">
                     {organization?.logo || user?.organizationLogo || user?.organization?.logo ? (
                       <img
                         src={organization?.logo || user?.organizationLogo || user?.organization?.logo}
@@ -280,12 +280,12 @@ export default function KisanConnectLayout({ children }) {
           {/* User Profile Card */}
           <div
             onClick={() => navigate('/profile')}
-            className="flex items-center justify-between p-2 rounded-xl hover:bg-rose-50/80 transition cursor-pointer border border-transparent hover:border-rose-200"
+            className="flex items-center justify-between p-2.5 bg-white rounded-2xl border border-slate-200/90 hover:border-rose-200 hover:bg-rose-50/20 transition cursor-pointer shadow-2xs"
           >
             <div className="flex items-center gap-2.5 min-w-0">
-              <Avatar src={user?.avatar} name={user?.name || (isSuperAdmin ? 'KisanConnect Super Admin' : 'Kisan Choice')} size="sm" />
+              <Avatar src={user?.avatar} name={user?.name || (isSuperAdmin ? 'TrackPro Super Admin' : 'Kisan Choice')} size="sm" />
               <div className="min-w-0">
-                <span className="text-xs font-extrabold text-slate-900 truncate block">{user?.name || (isSuperAdmin ? 'Super Admin' : 'Kisan Choice')}</span>
+                <span className="text-xs font-bold text-slate-900 truncate block">{user?.name || (isSuperAdmin ? 'TrackPro Super Admin' : 'Kisan Choice')}</span>
                 <span className="text-[10px] text-slate-500 font-semibold truncate block capitalize">
                   {isSuperAdmin ? 'Super Administrator' : userRole === 'ORG_ADMIN' ? 'Organization Admin' : userRole.toLowerCase()}
                 </span>
@@ -297,7 +297,7 @@ export default function KisanConnectLayout({ children }) {
                 logout();
               }}
               title="Sign Out"
-              className="text-slate-500 hover:text-rose-600 p-1.5 rounded-lg hover:bg-rose-100 transition cursor-pointer"
+              className="text-slate-400 hover:text-rose-600 p-1.5 rounded-xl hover:bg-rose-50 transition cursor-pointer flex-shrink-0"
             >
               <LogOut className="w-4 h-4" />
             </button>
