@@ -97,29 +97,67 @@ export default function AdminDashboard() {
             recentActivities: dbAct,
           } = res.data;
 
-          if (dbStats) setStats(dbStats);
-          if (attendanceOverview) setAttendanceData(attendanceOverview);
-          if (departmentWise) setDeptData(departmentWise);
+          if (dbStats) {
+            setStats({
+              totalEmployees: dbStats.totalEmployees ?? 0,
+              totalManagers: dbStats.totalManagers ?? 0,
+              presentToday: dbStats.presentToday ?? dbStats.presentEmployees ?? dbStats.todayAttendance ?? 0,
+              absentToday: dbStats.absentToday ?? dbStats.absentEmployees ?? 0,
+              currentlyOnline: dbStats.currentlyOnline ?? dbStats.activeEmployees ?? 0,
+              currentlyTracking: dbStats.currentlyTracking ?? dbStats.trackingNow ?? 0,
+              totalKm: dbStats.totalKm ?? 0,
+            });
+          }
+
+          if (attendanceOverview && attendanceOverview.length > 0) {
+            setAttendanceData(attendanceOverview);
+          }
+
+          if (departmentWise && departmentWise.length > 0) {
+            setDeptData(departmentWise);
+          }
+
           if (dbRecent && dbRecent.length > 0) {
             const mappedRecent = dbRecent.map((e) => ({
               id: e._id,
               name: e.name,
               avatar: e.avatar,
-              empId: e.employeeId || 'EMP-' + e._id.slice(-6).toUpperCase(),
+              empId: e.employeeId || 'EMP-' + String(e._id).slice(-6).toUpperCase(),
               dept: e.department || 'Field Services',
               manager: e.manager?.name || e.managerName || 'Admin Assigned',
               status: e.isTracking ? 'Tracking' : e.isOnline ? 'Online' : 'Offline',
-              isTracking: e.isTracking,
+              isTracking: Boolean(e.isTracking),
               lastActive: e.lastSeen
                 ? new Date(e.lastSeen).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                 : 'Recently',
             }));
             setRecentEmployees(mappedRecent);
+          } else {
+            // Fallback fetch if recentEmployees was not populated
+            try {
+              const empRes = await API.get('/admin/employees?limit=10');
+              if (empRes.data?.success && Array.isArray(empRes.data.employees) && empRes.data.employees.length > 0) {
+                const mapped = empRes.data.employees.map((e) => ({
+                  id: e._id,
+                  name: e.name,
+                  avatar: e.avatar,
+                  empId: e.employeeId || 'EMP-' + String(e._id).slice(-6).toUpperCase(),
+                  dept: e.department || 'Field Services',
+                  manager: e.manager?.name || e.managerName || 'Admin Assigned',
+                  status: e.isTracking ? 'Tracking' : e.isOnline ? 'Online' : 'Offline',
+                  isTracking: Boolean(e.isTracking),
+                  lastActive: e.lastSeen
+                    ? new Date(e.lastSeen).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                    : 'Recently',
+                }));
+                setRecentEmployees(mapped);
+              }
+            } catch (_) {}
           }
+
           if (dbLeaves) setUpcomingLeaves(dbLeaves);
           if (dbLive) setLiveLocations(dbLive);
           if (dbAct) setRecentActivities(dbAct);
-
         }
       } catch (e) {
         console.warn('Dashboard fetch error:', e);
