@@ -116,6 +116,23 @@ async function reverseGeocode(lat, lng) {
   }
 }
 
+function isReadableAddress(addr) {
+  if (!addr || typeof addr !== "string") return false;
+  const t = addr.trim();
+  if (
+    t.startsWith("Location acquired:") ||
+    t.startsWith("Location checkpoint") ||
+    t.startsWith("Location (") ||
+    t.startsWith("(") ||
+    t === "Location unavailable" ||
+    t === "Tracking Active" ||
+    t === "Not Punched In"
+  ) {
+    return false;
+  }
+  return true;
+}
+
 // Format duration from start time to now
 function formatTravelDuration(startTime) {
   if (!startTime) return "0m";
@@ -197,33 +214,117 @@ export default function AdminLiveMap() {
       (emp.employeeId && emp.employeeId.toLowerCase().includes(searchQuery.toLowerCase()));
     if (!matchesSearch) return false;
 
-    if (activeFilter === "Active") return loc?.isActive || emp.isTracking;
+    if (activeFilter === "Active") return loc?.isActive || emp.isTracking || ((loc?.totalDistance || 0) > 0);
     if (activeFilter === "All") return true;
     if (activeFilter === "Away") return !loc?.isActive && !emp.isTracking;
     if (activeFilter === "Stationary") return stationaryEmps.has(empIdStr);
     return true;
   });
 
+  const fetchAddress = useCallback(async (empId, lat, lng) => {
+    const addr = await reverseGeocode(lat, lng);
+    setAddresses(prev => ({ ...prev, [String(empId)]: addr }));
+  }, []);
+
+  const fetchLive = async (silent = false) => {
+    if (!silent) setLoading(true);
+    try {
+      const { data } = await trackingAPI.getLive();
+      setEmployees(data.employees || []);
+      const locMap = {};
+      (data.locations || []).forEach(l => {
+        const empId = l.employee?._id || l.employee;
+        if (empId) {
+          const empIdStr = String(empId);
+          const coords = l.coordinates && l.coordinates.length > 0
+            ? l.coordinates
+            : (l.lat && l.lng ? [{ lat: l.lat, lng: l.lng, address: l.address, timestamp: l.updatedAt || l.startTime }] : []);
+
+          const last = coords.length > 0 ? coords[coords.length - 1] : { lat: l.lat || null, lng: l.lng || null, address: l.address || l.startAddress };
+          const first = coords.length > 0 ? coords[0] : last;
+          const path = coords.map(c => ({ lat: c.lat, lng: c.lng, timestamp: c.timestamp, address: c.address }));
+          const totalKm = typeof l.totalDistance === 'number' ? l.totalDistance : (l.officialDistance || 0);
+
+          locMap[empIdStr] = {
+            ...last,
+            lat: last.lat,
+            lng: last.lng,
+            isActive: l.isActive !== false,
+            name: l.employee?.name || l.name,
+            employeeIdCode: l.employee?.employeeId || l.employeeIdCode,
+            avatar: l.employee?.avatar || l.avatar,
+            department: l.employee?.department || l.department,
+            totalDistance: totalKm,
+            startTime: l.startTime || first.timestamp || new Date(),
+            startAddress: l.startAddress || first.address,
+            sessionId: l.sessionId,
+            updatedAt: l.updatedAt || last.timestamp || new Date(),
+            path
+          };
+          getEmpColor(empIdStr);
+          if (isReadableAddress(last.address)) {
+            setAddresses(prev => ({ ...prev, [empIdStr]: last.address }));
+          } else if (last.lat && last.lng) {
+            fetchAddress(empIdStr, last.lat, last.lng);
+          }
+        }
+      });
+      setLocations(locMap);
+
+      // Auto-select first active tracking employee if none selected on initial load
+      const allLocs = Object.entries(locMap);
+      if (allLocs.length > 0 && !selected && !silent) {
+        const [firstEmpId, firstLoc] = allLocs[0];
+        setSelected(firstEmpId);
+        setFlyCenter([firstLoc.lat, firstLoc.lng]);
+        setFlyZoom(14);
+      }
+    } catch {
+      if (!silent) toast.error("Failed to load live data");
+    } finally {
+      if (!silent) setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    fetchLive();
+    fetchLive(false);
+
+    // Continuous 5-second background sync guarantees real-time refresh even across multiple servers
+    const pollTimer = setInterval(() => {
+      fetchLive(true);
+    }, 5000);
+
     const socket = getSocket();
     if (socket) {
       socket.on("employee_location", (data) => {
         const empIdStr = String(data.employeeId);
         setLocations(prev => {
           const existing = prev[empIdStr] || prev[data.employeeId] || {};
+          const incomingDist = typeof data.totalDistance === 'number'
+            ? data.totalDistance
+            : (typeof data.sessionDistance === 'number' ? data.sessionDistance : 0);
+
+          const updatedDist = Math.max(Number(existing.totalDistance) || 0, Number(incomingDist) || 0);
+
           return {
-            ...prev,
-            [empIdStr]: {
-              ...existing,
-              ...data,
-              isActive: true,
-              path: [...(existing.path || []), { lat: data.lat, lng: data.lng, timestamp: new Date() }]
-            }
+            ...existing,
+            ...data,
+            totalDistance: updatedDist,
+            isActive: true,
+            path: data.lat && data.lng
+              ? [...(existing.path || []), { lat: data.lat, lng: data.lng, timestamp: new Date() }]
+              : (existing.path || [])
           };
         });
-        if (data.address) setAddresses(prev => ({ ...prev, [empIdStr]: data.address }));
-        else fetchAddress(empIdStr, data.lat, data.lng);
+
+        // Also ensure employee object in list is marked isTracking / isOnline
+        setEmployees(prev => prev.map(e => String(e._id) === empIdStr ? { ...e, isTracking: true, isOnline: true } : e));
+
+        if (isReadableAddress(data.address)) {
+          setAddresses(prev => ({ ...prev, [empIdStr]: data.address }));
+        } else if (data.lat && data.lng) {
+          fetchAddress(empIdStr, data.lat, data.lng);
+        }
         setStationaryEmps(prev => { const n = new Set(prev); n.delete(empIdStr); return n; });
       });
 
@@ -244,20 +345,40 @@ export default function AdminLiveMap() {
       });
 
       socket.on("employee_tracking_started", (data) => {
-        fetchLive();
-        toast.success("📍 " + data.name + " started tracking");
+        fetchLive(true);
+        toast.success("📍 " + (data.name || "Employee") + " started tracking");
       });
 
-      socket.on("employee_tracking_stopped", () => fetchLive());
+      socket.on("employee_tracking_stopped", (data) => {
+        const empIdStr = data?.employeeId ? String(data.employeeId) : null;
+        if (empIdStr) {
+          setLocations(prev => {
+            if (!prev[empIdStr]) return prev;
+            return {
+              ...prev,
+              [empIdStr]: {
+                ...prev[empIdStr],
+                isActive: false,
+                totalDistance: typeof data.totalDistance === 'number' ? data.totalDistance : prev[empIdStr].totalDistance
+              }
+            };
+          });
+          setEmployees(prev => prev.map(e => String(e._id) === empIdStr ? { ...e, isTracking: false } : e));
+          setStationaryEmps(prev => { const n = new Set(prev); n.delete(empIdStr); return n; });
+        } else {
+          fetchLive(true);
+        }
+      });
 
       socket.on("employee_offline", ({ employeeId }) => {
         const empIdStr = String(employeeId);
-        setLocations(prev => { const n = { ...prev }; delete n[empIdStr]; delete n[employeeId]; return n; });
-        setStationaryEmps(prev => { const n = new Set(prev); n.delete(empIdStr); return n; });
+        // Only mark socket as offline — NEVER kill active tracking shift or wipe distance!
+        setEmployees(prev => prev.map(e => String(e._id) === empIdStr ? { ...e, isOnline: false } : e));
       });
     }
 
     return () => {
+      clearInterval(pollTimer);
       if (socket) {
         socket.off("employee_location");
         socket.off("employee_stationary");
@@ -267,68 +388,6 @@ export default function AdminLiveMap() {
       }
     };
   }, []);
-
-  const fetchAddress = useCallback(async (empId, lat, lng) => {
-    const addr = await reverseGeocode(lat, lng);
-    setAddresses(prev => ({ ...prev, [String(empId)]: addr }));
-  }, []);
-
-  const fetchLive = async () => {
-    setLoading(true);
-    try {
-      const { data } = await trackingAPI.getLive();
-      setEmployees(data.employees || []);
-      const locMap = {};
-      (data.locations || []).forEach(l => {
-        const empId = l.employee?._id || l.employee;
-        if (empId) {
-          const empIdStr = String(empId);
-          const coords = l.coordinates && l.coordinates.length > 0
-            ? l.coordinates
-            : (l.lat && l.lng ? [{ lat: l.lat, lng: l.lng, address: l.address, timestamp: l.updatedAt || l.startTime }] : []);
-
-          if (coords.length > 0) {
-            const last = coords[coords.length - 1];
-            const first = coords[0];
-            const path = coords.map(c => ({ lat: c.lat, lng: c.lng, timestamp: c.timestamp, address: c.address }));
-            locMap[empIdStr] = {
-              ...last,
-              isActive: l.isActive !== false,
-              name: l.employee?.name || l.name,
-              employeeIdCode: l.employee?.employeeId || l.employeeIdCode,
-              avatar: l.employee?.avatar || l.avatar,
-              department: l.employee?.department || l.department,
-              totalDistance: l.totalDistance || 0,
-              startTime: l.startTime || first.timestamp || new Date(),
-              startAddress: l.startAddress || first.address,
-              sessionId: l.sessionId,
-              updatedAt: l.updatedAt || last.timestamp || new Date(),
-              path
-            };
-            getEmpColor(empIdStr);
-            if (last.address) setAddresses(prev => ({ ...prev, [empIdStr]: last.address }));
-            else if (last.lat && last.lng) fetchAddress(empIdStr, last.lat, last.lng);
-          }
-        }
-      });
-      setLocations(locMap);
-
-      // Auto-select first active tracking employee if none selected
-      const allLocs = Object.entries(locMap);
-      if (allLocs.length > 0) {
-        const [firstEmpId, firstLoc] = allLocs[0];
-        if (!selected) {
-          setSelected(firstEmpId);
-        }
-        setFlyCenter([firstLoc.lat, firstLoc.lng]);
-        setFlyZoom(14);
-      }
-    } catch {
-      toast.error("Failed to load live data");
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleSelectEmployee = (empId) => {
     const empIdStr = String(empId);
@@ -474,7 +533,7 @@ export default function AdminLiveMap() {
                         <div className="bg-[var(--bg-main)]/50 p-2 rounded-xl border border-[var(--border-color)] mb-2.5">
                           <p className="text-[10px] text-[var(--text-muted)] line-clamp-2 leading-relaxed flex items-start gap-1.5">
                             <MapPin className="w-3 h-3 text-primary-500 flex-shrink-0 mt-0.5" />
-                            {addresses[empId] || loc.address || "Fetching current address..."}
+                            {addresses[empId] || (isReadableAddress(loc.address) ? loc.address : null) || "Fetching current address..."}
                           </p>
                         </div>
 
@@ -661,7 +720,7 @@ export default function AdminLiveMap() {
                       <div className="min-w-0 flex-1">
                         <p className="text-[10px] font-black text-[var(--text-muted)] uppercase">Current Location</p>
                         <p className="text-xs font-bold text-[var(--text-main)] leading-relaxed">
-                          {addresses[selectedIdStr] || selectedLoc?.address || "Detecting live GPS coordinates..."}
+                          {addresses[selectedIdStr] || (isReadableAddress(selectedLoc?.address) ? selectedLoc?.address : null) || "Detecting live GPS address..."}
                         </p>
                       </div>
                     </div>
@@ -863,11 +922,15 @@ export default function AdminLiveMap() {
                             {emp.name ? emp.name[0].toUpperCase() : "E"}
                           </div>
                         )}
-                        {isActiveTracking && (
-                          <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-500 border-2 border-[var(--bg-sidebar)]" />
-                        )}
+                        <div
+                          className={
+                            "absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-[var(--bg-sidebar)] " +
+                            (isActiveTracking ? "bg-emerald-500 ring-2 ring-emerald-500/30 animate-pulse" : "bg-slate-400")
+                          }
+                          title={isActiveTracking ? "Online & Tracking ON" : "Offline / Tracking OFF"}
+                        />
                         {isStationary && (
-                          <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-amber-500 border-2 border-[var(--bg-sidebar)] flex items-center justify-center text-[9px] text-white font-black">
+                          <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-amber-500 border-2 border-[var(--bg-sidebar)] flex items-center justify-center text-[9px] text-white font-black shadow-xs">
                             !
                           </div>
                         )}
@@ -875,13 +938,28 @@ export default function AdminLiveMap() {
 
                       {/* Info */}
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between mb-0.5">
-                          <p className="text-[var(--text-main)] font-black text-xs truncate">{emp.name}</p>
-                          {loc && (
-                            <span className="text-emerald-600 text-[10px] font-black italic flex-shrink-0 ml-1">
-                              {(loc.totalDistance || 0).toFixed(1)} km
+                        <div className="flex items-center justify-between gap-1 mb-0.5">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <p className="text-[var(--text-main)] font-black text-xs truncate">{emp.name}</p>
+                            <span
+                              className={
+                                "text-[9px] font-black px-1.5 py-0.2 rounded-full uppercase tracking-wider flex-shrink-0 " +
+                                (isActiveTracking
+                                  ? "bg-emerald-500/15 text-emerald-600 border border-emerald-500/30"
+                                  : "bg-slate-500/15 text-slate-500 border border-slate-500/20")
+                              }
+                            >
+                              {isActiveTracking ? "ON" : "OFF"}
                             </span>
-                          )}
+                          </div>
+                          <span
+                            className={
+                              "text-xs font-black flex-shrink-0 ml-1 " +
+                              (isActiveTracking ? "text-emerald-600" : "text-[var(--text-muted)]")
+                            }
+                          >
+                            {(loc?.totalDistance || 0).toFixed(2)} km
+                          </span>
                         </div>
                         <p className="text-[var(--text-muted)] text-[10px] font-medium truncate">
                           {loc

@@ -171,6 +171,7 @@ export default function AdminEmployees() {
       const res = await API.post('/employees/assign-manager', {
         employeeIds: selectedIds,
         managerId: bulkManagerId,
+        mode: 'append',
       });
 
       if (res.data?.success) {
