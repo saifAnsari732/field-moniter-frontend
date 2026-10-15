@@ -135,10 +135,90 @@ function FlyTo({ center, zoom }) {
   return null;
 }
 
+// Filter out :sync: coordinates and duplicate collision points
+function filterCleanCoords(rawCoords) {
+  if (!Array.isArray(rawCoords)) return [];
+  const clean = [];
+  let lastLat = null;
+  let lastLng = null;
+
+  for (const c of rawCoords) {
+    if (!c) continue;
+    // Filter out :sync: coordinates (eliminates duplicate collision zig-zag paths)
+    if (c.eventId && typeof c.eventId === 'string' && c.eventId.includes(':sync:')) {
+      continue;
+    }
+    const lat = Number(c.lat);
+    const lng = Number(c.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || isNaN(lat) || isNaN(lng)) continue;
+    if (lat === 0 && lng === 0) continue;
+
+    // Filter consecutive duplicate collision points
+    if (lastLat !== null && lastLng !== null) {
+      if (Math.abs(lat - lastLat) < 0.00001 && Math.abs(lng - lastLng) < 0.00001) {
+        continue;
+      }
+    }
+
+    clean.push({
+      ...c,
+      lat,
+      lng,
+      timestamp: c.timestamp,
+      address: c.address,
+      eventId: c.eventId
+    });
+    lastLat = lat;
+    lastLng = lng;
+  }
+  return clean;
+}
+
+// In-place Leaflet polyline update: smooth rendering without screen flashing
+function SmoothHistoryPolyline({ coords, color = '#e11d48' }) {
+  const map = useMap();
+  const outerRef = useRef(null);
+  const innerRef = useRef(null);
+
+  useEffect(() => {
+    if (!map) return;
+    const cleanCoords = filterCleanCoords(coords);
+    const latLngs = cleanCoords.map((c) => [c.lat, c.lng]);
+
+    if (latLngs.length < 2) {
+      if (outerRef.current) { map.removeLayer(outerRef.current); outerRef.current = null; }
+      if (innerRef.current) { map.removeLayer(innerRef.current); innerRef.current = null; }
+      return;
+    }
+
+    if (!outerRef.current) {
+      outerRef.current = L.polyline(latLngs, { color, weight: 8, opacity: 0.25 }).addTo(map);
+      innerRef.current = L.polyline(latLngs, { color, weight: 4, opacity: 1, lineCap: 'round', lineJoin: 'round' }).addTo(map);
+    } else {
+      outerRef.current.setLatLngs(latLngs);
+      outerRef.current.setStyle({ color });
+      innerRef.current.setLatLngs(latLngs);
+      innerRef.current.setStyle({ color });
+    }
+  }, [map, coords, color]);
+
+  useEffect(() => {
+    return () => {
+      if (outerRef.current && map) { map.removeLayer(outerRef.current); outerRef.current = null; }
+      if (innerRef.current && map) { map.removeLayer(innerRef.current); innerRef.current = null; }
+    };
+  }, [map]);
+
+  return null;
+}
+
 const processTimeline = (session) => {
   if (!session || !session.coordinates || session.coordinates.length === 0) return [];
 
-  const coords = session.coordinates;
+  // Filter only coordinates with valid numerical lat and lng, excluding :sync: artifacts and duplicates
+  const coords = filterCleanCoords(session.coordinates);
+  if (coords.length === 0) return [];
+
   const events = [];
 
   // 1. Punch In
@@ -166,6 +246,7 @@ const processTimeline = (session) => {
         const dist = currentSegment.reduce((acc, curr, idx) => {
           if (idx === 0) return 0;
           const p = currentSegment[idx - 1];
+          if (!p || typeof p.lat !== 'number' || typeof p.lng !== 'number' || !curr || typeof curr.lat !== 'number' || typeof curr.lng !== 'number') return acc;
           const d = L.latLng(p.lat, p.lng).distanceTo(L.latLng(curr.lat, curr.lng)) / 1000;
           return acc + d;
         }, 0);
@@ -201,6 +282,7 @@ const processTimeline = (session) => {
     const dist = currentSegment.reduce((acc, curr, idx) => {
       if (idx === 0) return 0;
       const p = currentSegment[idx - 1];
+      if (!p || typeof p.lat !== 'number' || typeof p.lng !== 'number' || !curr || typeof curr.lat !== 'number' || typeof curr.lng !== 'number') return acc;
       const d = L.latLng(p.lat, p.lng).distanceTo(L.latLng(curr.lat, curr.lng)) / 1000;
       return acc + d;
     }, 0);
@@ -348,10 +430,11 @@ export default function AdminTrackingHistory() {
 
     // If session already has coordinate(s), fly to them immediately
     if (session.coordinates && session.coordinates.length > 0) {
-      const targetCoord = session.coordinates[session.coordinates.length - 1] || session.coordinates[0];
+      const cleanInitCoords = filterCleanCoords(session.coordinates);
+      const targetCoord = cleanInitCoords[cleanInitCoords.length - 1] || cleanInitCoords[0];
       if (targetCoord?.lat && targetCoord?.lng) {
         setFlyCenter([targetCoord.lat, targetCoord.lng]);
-        setFlyZoom(session.coordinates.length > 1 ? 15 : 16);
+        setFlyZoom(cleanInitCoords.length > 1 ? 15 : 16);
       }
     }
 
@@ -362,7 +445,7 @@ export default function AdminTrackingHistory() {
         const fullSession = { ...session, ...data.session };
         setSelectedSession(fullSession);
         
-        const coords = fullSession.coordinates || [];
+        const coords = filterCleanCoords(fullSession.coordinates || []);
         if (coords.length > 0) {
           const latestCoord = coords[coords.length - 1] || coords[0];
           if (latestCoord?.lat && latestCoord?.lng) {
@@ -872,8 +955,9 @@ export default function AdminTrackingHistory() {
             {/* Leaflet Interactive Route Map */}
             <div className="h-[360px] sm:h-[400px] w-full bg-white rounded-2xl border border-slate-200 overflow-hidden relative shadow-sm">
               {sessionLoading && (
-                <div className="absolute inset-0 z-[1000] bg-white/60 backdrop-blur-xs flex items-center justify-center">
-                  <Loader2 className="w-10 h-10 text-rose-600 animate-spin" />
+                <div className="absolute top-3 right-3 z-[1000] bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-xl shadow-md border border-slate-200 flex items-center gap-2 text-xs font-semibold text-rose-600 animate-in fade-in duration-200 pointer-events-none">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-rose-600" />
+                  <span>Loading route...</span>
                 </div>
               )}
 
@@ -887,103 +971,99 @@ export default function AdminTrackingHistory() {
                 {!sessionLoading && !selectedSession && history.length > 0 && <MultiMapBounds sessions={history} />}
                 <FlyTo center={flyCenter} zoom={flyZoom} />
 
-                {selectedSession && selectedSession.coordinates && selectedSession.coordinates.length > 0 && (
-                  <>
-                    <MapBounds coords={selectedSession.coordinates} trigger={selectionTrigger} />
+                {selectedSession && selectedSession.coordinates && selectedSession.coordinates.length > 0 && (() => {
+                  const validCoords = filterCleanCoords(selectedSession.coordinates);
+                  if (validCoords.length === 0) return null;
 
-                    {/* Polyline Path if > 1 coordinate */}
-                    {selectedSession.coordinates.length > 1 && (
-                      <>
-                        <Polyline
-                          positions={selectedSession.coordinates.map((c) => [c.lat, c.lng])}
-                          pathOptions={{ color: '#e11d48', weight: 8, opacity: 0.25 }}
-                        />
-                        <Polyline
-                          positions={selectedSession.coordinates.map((c) => [c.lat, c.lng])}
-                          pathOptions={{ color: '#e11d48', weight: 4, opacity: 1, lineCap: 'round', lineJoin: 'round' }}
-                        />
+                  const firstCoord = validCoords[0];
+                  const lastCoord = validCoords[validCoords.length - 1];
+                  const isLive = selectedSession.isActive || validCoords.length === 1;
 
-                        {/* Start Marker (IN) */}
-                        <Marker
-                          position={[selectedSession.coordinates[0].lat, selectedSession.coordinates[0].lng]}
-                          icon={startIcon}
-                        >
-                          <Popup>
-                            <div className="p-1 min-w-[150px]">
-                              <p className="font-bold text-xs text-emerald-600">🟢 Check-In Point</p>
-                              <p className="text-[11px] text-slate-700 mt-0.5">{selectedSession.startAddress || 'Start Location'}</p>
-                              <p className="text-[10px] text-slate-500 mt-1 font-mono">
-                                {new Date(selectedSession.startTime).toLocaleTimeString()}
-                              </p>
-                            </div>
-                          </Popup>
-                        </Marker>
+                  return (
+                    <>
+                      <MapBounds coords={validCoords} trigger={selectionTrigger} />
 
-                        {/* Stop Markers */}
-                        {processTimeline(selectedSession)
-                          .filter((e) => e.type === 'Stop' && e.duration >= 15)
-                          .map((stop, i) => (
-                            <Marker key={`stop-${i}`} position={[stop.lat, stop.lng]} icon={stopIcon}>
-                              <Popup>
-                                <div className="p-1 min-w-[150px]">
-                                  <p className="font-bold text-xs text-amber-600">⏸️ Stationary Stop ({stop.duration} min)</p>
-                                  <p className="text-[11px] text-slate-700 mt-0.5">{stop.address || 'Halt location'}</p>
-                                  <p className="text-[10px] text-slate-500 mt-1 font-mono">{new Date(stop.time).toLocaleTimeString()}</p>
-                                </div>
-                              </Popup>
-                            </Marker>
-                          ))}
-                      </>
-                    )}
+                      {/* Smooth in-place Leaflet polyline (no flashing or unmounting) */}
+                      {validCoords.length > 1 && (
+                        <>
+                          <SmoothHistoryPolyline coords={validCoords} color="#e11d48" />
 
-                    {/* End Marker or Live Avatar Marker */}
-                    {(() => {
-                      const lastCoord = selectedSession.coordinates[selectedSession.coordinates.length - 1];
-                      const isLive = selectedSession.isActive || selectedSession.coordinates.length === 1;
-                      return (
-                        <Marker
-                          position={[lastCoord.lat, lastCoord.lng]}
-                          icon={
-                            isLive
-                              ? L.divIcon({
-                                  className: 'custom-avatar-marker',
-                                  html: `<div style="position:relative;width:42px;height:42px;cursor:pointer;">
-                                    <div class="pulse-ring" style="position:absolute;top:-6px;left:-6px;width:54px;height:54px;border-radius:50%;background:#e11d4844;animation:trkPulse 1.8s infinite;"></div>
-                                    <div style="position:relative;z-index:2;width:42px;height:42px;border-radius:50%;background:#e11d48;border:3px solid #fff;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 14px rgba(0,0,0,0.35);color:#fff;font-weight:900;font-size:15px;">
-                                      ${selectedSession.employee?.name?.[0] || 'E'}
-                                    </div>
-                                  </div>`,
-                                  iconSize: [42, 42],
-                                  iconAnchor: [21, 21],
-                                })
-                              : endIcon
-                          }
-                        >
-                          <Popup>
-                            <div className="p-1.5 min-w-[170px]">
-                              <div className="flex items-center gap-2 mb-1.5 pb-1 border-b border-slate-100">
-                                <div className="w-6 h-6 rounded-full bg-rose-600 text-white font-black text-xs flex items-center justify-center">
-                                  {selectedSession.employee?.name?.[0] || 'E'}
-                                </div>
-                                <div>
-                                  <p className="font-black text-xs text-slate-900 leading-none">{selectedSession.employee?.name || 'Field Employee'}</p>
-                                  <p className="text-[10px] text-slate-400 font-semibold mt-0.5">{selectedSession.employee?.employeeId || 'EMP'}</p>
-                                </div>
+                          {/* Start Marker (IN) */}
+                          <Marker
+                            position={[firstCoord.lat, firstCoord.lng]}
+                            icon={startIcon}
+                          >
+                            <Popup>
+                              <div className="p-1 min-w-[150px]">
+                                <p className="font-bold text-xs text-emerald-600">🟢 Check-In Point</p>
+                                <p className="text-[11px] text-slate-700 mt-0.5">{selectedSession.startAddress || 'Start Location'}</p>
+                                <p className="text-[10px] text-slate-500 mt-1 font-mono">
+                                  {new Date(selectedSession.startTime).toLocaleTimeString()}
+                                </p>
                               </div>
-                              <p className={`font-bold text-[11px] ${selectedSession.isActive ? 'text-emerald-600' : 'text-rose-600'}`}>
-                                {selectedSession.isActive ? '🟢 Active GPS Live Location' : '🔴 Check-Out Point'}
-                              </p>
-                              <p className="text-[11px] text-slate-600 mt-1">{lastCoord.address || selectedSession.endAddress || selectedSession.startAddress || 'Location point'}</p>
-                              <p className="text-[10px] text-slate-400 mt-1 font-mono">
-                                {selectedSession.endTime ? new Date(selectedSession.endTime).toLocaleTimeString() : (lastCoord.timestamp ? new Date(lastCoord.timestamp).toLocaleTimeString() : 'Live')}
-                              </p>
+                            </Popup>
+                          </Marker>
+
+                          {/* Stop Markers */}
+                          {processTimeline(selectedSession)
+                            .filter((e) => e.type === 'Stop' && e.duration >= 15 && typeof e.lat === 'number' && typeof e.lng === 'number')
+                            .map((stop, i) => (
+                              <Marker key={`stop-${i}`} position={[stop.lat, stop.lng]} icon={stopIcon}>
+                                <Popup>
+                                  <div className="p-1 min-w-[150px]">
+                                    <p className="font-bold text-xs text-amber-600">⏸️ Stationary Stop ({stop.duration} min)</p>
+                                    <p className="text-[11px] text-slate-700 mt-0.5">{stop.address || 'Halt location'}</p>
+                                    <p className="text-[10px] text-slate-500 mt-1 font-mono">{new Date(stop.time).toLocaleTimeString()}</p>
+                                  </div>
+                                </Popup>
+                              </Marker>
+                            ))}
+                        </>
+                      )}
+
+                      {/* End Marker or Live Avatar Marker */}
+                      <Marker
+                        position={[lastCoord.lat, lastCoord.lng]}
+                        icon={
+                          isLive
+                            ? L.divIcon({
+                                className: 'custom-avatar-marker',
+                                html: `<div style="position:relative;width:42px;height:42px;cursor:pointer;">
+                                  <div class="pulse-ring" style="position:absolute;top:-6px;left:-6px;width:54px;height:54px;border-radius:50%;background:#e11d4844;animation:trkPulse 1.8s infinite;"></div>
+                                  <div style="position:relative;z-index:2;width:42px;height:42px;border-radius:50%;background:#e11d48;border:3px solid #fff;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 14px rgba(0,0,0,0.35);color:#fff;font-weight:900;font-size:15px;">
+                                    ${selectedSession.employee?.name?.[0] || 'E'}
+                                  </div>
+                                </div>`,
+                                iconSize: [42, 42],
+                                iconAnchor: [21, 21],
+                              })
+                            : endIcon
+                        }
+                      >
+                        <Popup>
+                          <div className="p-1.5 min-w-[170px]">
+                            <div className="flex items-center gap-2 mb-1.5 pb-1 border-b border-slate-100">
+                              <div className="w-6 h-6 rounded-full bg-rose-600 text-white font-black text-xs flex items-center justify-center">
+                                {selectedSession.employee?.name?.[0] || 'E'}
+                              </div>
+                              <div>
+                                <p className="font-black text-xs text-slate-900 leading-none">{selectedSession.employee?.name || 'Field Employee'}</p>
+                                <p className="text-[10px] text-slate-400 font-semibold mt-0.5">{selectedSession.employee?.employeeId || 'EMP'}</p>
+                              </div>
                             </div>
-                          </Popup>
-                        </Marker>
-                      );
-                    })()}
-                  </>
-                )}
+                            <p className={`font-bold text-[11px] ${selectedSession.isActive ? 'text-emerald-600' : 'text-rose-600'}`}>
+                              {selectedSession.isActive ? '🟢 Active GPS Live Location' : '🔴 Check-Out Point'}
+                            </p>
+                            <p className="text-[11px] text-slate-600 mt-1">{lastCoord.address || selectedSession.endAddress || selectedSession.startAddress || 'Location point'}</p>
+                            <p className="text-[10px] text-slate-400 mt-1 font-mono">
+                              {selectedSession.endTime ? new Date(selectedSession.endTime).toLocaleTimeString() : (lastCoord.timestamp ? new Date(lastCoord.timestamp).toLocaleTimeString() : 'Live')}
+                            </p>
+                          </div>
+                        </Popup>
+                      </Marker>
+                    </>
+                  );
+                })()}
               </MapContainer>
             </div>
 

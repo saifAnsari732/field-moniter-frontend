@@ -102,6 +102,146 @@ function FlyTo({ center, zoom }) {
   return null;
 }
 
+// Filter out :sync: coordinates and duplicate collision points
+function filterCleanCoords(rawCoords) {
+  if (!Array.isArray(rawCoords)) return [];
+  const clean = [];
+  let lastLat = null;
+  let lastLng = null;
+
+  for (const c of rawCoords) {
+    if (!c) continue;
+    // Filter out :sync: coordinates (eliminates duplicate collision zig-zag paths)
+    if (c.eventId && typeof c.eventId === 'string' && c.eventId.includes(':sync:')) {
+      continue;
+    }
+    const lat = Number(c.lat);
+    const lng = Number(c.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || isNaN(lat) || isNaN(lng)) continue;
+    if (lat === 0 && lng === 0) continue;
+
+    // Filter consecutive duplicate collision points
+    if (lastLat !== null && lastLng !== null) {
+      if (Math.abs(lat - lastLat) < 0.00001 && Math.abs(lng - lastLng) < 0.00001) {
+        continue;
+      }
+    }
+
+    clean.push({
+      ...c,
+      lat,
+      lng,
+      timestamp: c.timestamp,
+      address: c.address,
+      eventId: c.eventId
+    });
+    lastLat = lat;
+    lastLng = lng;
+  }
+  return clean;
+}
+
+const empIconCache = new Map();
+function getEmployeeMarkerIcon(name, color, isActive, avatar, isStationary) {
+  const key = `${name || '?'}_${color}_${isActive ? 1 : 0}_${avatar || ''}_${isStationary ? 1 : 0}`;
+  if (!empIconCache.has(key)) {
+    empIconCache.set(key, createEmployeeIcon(name, color, isActive, avatar, isStationary));
+  }
+  return empIconCache.get(key);
+}
+
+// In-place Leaflet polyline update: updates latLngs directly without unmounting/recreating DOM layers
+function LivePolylineLayer({ path, color }) {
+  const map = useMap();
+  const polylineGlowRef = useRef(null);
+  const polylineMainRef = useRef(null);
+  const polylineDashRef = useRef(null);
+  const startMarkerRef = useRef(null);
+  const currentMarkerRef = useRef(null);
+
+  useEffect(() => {
+    if (!map) return;
+
+    const cleanCoords = filterCleanCoords(path);
+    const latLngs = cleanCoords.map(p => [p.lat, p.lng]);
+
+    if (latLngs.length < 2) {
+      if (polylineGlowRef.current) { map.removeLayer(polylineGlowRef.current); polylineGlowRef.current = null; }
+      if (polylineMainRef.current) { map.removeLayer(polylineMainRef.current); polylineMainRef.current = null; }
+      if (polylineDashRef.current) { map.removeLayer(polylineDashRef.current); polylineDashRef.current = null; }
+      if (startMarkerRef.current) { map.removeLayer(startMarkerRef.current); startMarkerRef.current = null; }
+      if (currentMarkerRef.current) { map.removeLayer(currentMarkerRef.current); currentMarkerRef.current = null; }
+      return;
+    }
+
+    const startPt = cleanCoords[0];
+    const endPt = cleanCoords[cleanCoords.length - 1];
+    const pathColor = color || "#3b82f6";
+
+    if (!polylineMainRef.current) {
+      polylineGlowRef.current = L.polyline(latLngs, {
+        color: pathColor,
+        weight: 14,
+        opacity: 0.15,
+        lineCap: "round"
+      }).addTo(map);
+
+      polylineMainRef.current = L.polyline(latLngs, {
+        color: pathColor,
+        weight: 5,
+        opacity: 0.95,
+        lineCap: "round",
+        lineJoin: "round"
+      }).addTo(map);
+
+      polylineDashRef.current = L.polyline(latLngs, {
+        color: "#ffffff",
+        weight: 1.5,
+        opacity: 0.7,
+        dashArray: "6, 12",
+        lineCap: "round"
+      }).addTo(map);
+
+      startMarkerRef.current = L.marker([startPt.lat, startPt.lng], {
+        icon: createStartIcon()
+      }).addTo(map);
+
+      currentMarkerRef.current = L.marker([endPt.lat, endPt.lng], {
+        icon: createCurrentIcon(pathColor),
+        zIndexOffset: 3000
+      }).addTo(map);
+    } else {
+      polylineGlowRef.current.setLatLngs(latLngs);
+      polylineGlowRef.current.setStyle({ color: pathColor });
+
+      polylineMainRef.current.setLatLngs(latLngs);
+      polylineMainRef.current.setStyle({ color: pathColor });
+
+      polylineDashRef.current.setLatLngs(latLngs);
+
+      if (startMarkerRef.current) {
+        startMarkerRef.current.setLatLng([startPt.lat, startPt.lng]);
+      }
+      if (currentMarkerRef.current) {
+        currentMarkerRef.current.setLatLng([endPt.lat, endPt.lng]);
+        currentMarkerRef.current.setIcon(createCurrentIcon(pathColor));
+      }
+    }
+  }, [map, path, color]);
+
+  useEffect(() => {
+    return () => {
+      if (polylineGlowRef.current && map) { map.removeLayer(polylineGlowRef.current); polylineGlowRef.current = null; }
+      if (polylineMainRef.current && map) { map.removeLayer(polylineMainRef.current); polylineMainRef.current = null; }
+      if (polylineDashRef.current && map) { map.removeLayer(polylineDashRef.current); polylineDashRef.current = null; }
+      if (startMarkerRef.current && map) { map.removeLayer(startMarkerRef.current); startMarkerRef.current = null; }
+      if (currentMarkerRef.current && map) { map.removeLayer(currentMarkerRef.current); currentMarkerRef.current = null; }
+    };
+  }, [map]);
+
+  return null;
+}
+
 const geocodeCache = {};
 async function reverseGeocode(lat, lng) {
   const key = Number(lat).toFixed(4) + "," + Number(lng).toFixed(4);
@@ -172,6 +312,14 @@ export default function AdminLiveMap() {
   const [stationaryEmps, setStationaryEmps] = useState(new Set());
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const empColorMap = useRef({});
+  const isPollingRef = useRef(false);
+  const initialLoadDoneRef = useRef(false);
+  const selectedRef = useRef(selected);
+  const prevLocationsRef = useRef({});
+
+  useEffect(() => {
+    selectedRef.current = selected;
+  }, [selected]);
 
   const getEmpColor = useCallback((empId) => {
     const id = String(empId);
@@ -227,7 +375,11 @@ export default function AdminLiveMap() {
   }, []);
 
   const fetchLive = async (silent = false) => {
-    if (!silent) setLoading(true);
+    const isBackground = silent || isPollingRef.current;
+    // Loading indicator only shown on initial full load, NOT on background polling (stops map flickering)
+    if (!isBackground && !initialLoadDoneRef.current) {
+      setLoading(true);
+    }
     try {
       const { data } = await trackingAPI.getLive();
       setEmployees(data.employees || []);
@@ -236,13 +388,31 @@ export default function AdminLiveMap() {
         const empId = l.employee?._id || l.employee;
         if (empId) {
           const empIdStr = String(empId);
-          const coords = l.coordinates && l.coordinates.length > 0
+          const rawCoords = l.coordinates && l.coordinates.length > 0
             ? l.coordinates
-            : (l.lat && l.lng ? [{ lat: l.lat, lng: l.lng, address: l.address, timestamp: l.updatedAt || l.startTime }] : []);
+            : (l.lat && l.lng ? [{ lat: l.lat, lng: l.lng, address: l.address, timestamp: l.updatedAt || l.startTime, eventId: l.eventId }] : []);
 
-          const last = coords.length > 0 ? coords[coords.length - 1] : { lat: l.lat || null, lng: l.lng || null, address: l.address || l.startAddress };
-          const first = coords.length > 0 ? coords[0] : last;
-          const path = coords.map(c => ({ lat: c.lat, lng: c.lng, timestamp: c.timestamp, address: c.address }));
+          // Filter out any :sync: coordinates and duplicate collision points
+          const cleanCoords = filterCleanCoords(rawCoords);
+
+          const last = cleanCoords.length > 0
+            ? cleanCoords[cleanCoords.length - 1]
+            : (l.lat && l.lng ? { lat: l.lat, lng: l.lng, address: l.address || l.startAddress, timestamp: l.updatedAt || l.startTime } : { lat: null, lng: null });
+          const first = cleanCoords.length > 0 ? cleanCoords[0] : last;
+
+          let path = cleanCoords;
+          // Retain accumulated path if backend only returned single point or hadn't updated
+          const prevLoc = prevLocationsRef.current[empIdStr];
+          if (path.length <= 1 && prevLoc?.path && prevLoc.path.length > 1) {
+            path = prevLoc.path;
+            if (last.lat && last.lng) {
+              const lastPathPt = path[path.length - 1];
+              if (!lastPathPt || Math.abs(lastPathPt.lat - last.lat) > 0.00001 || Math.abs(lastPathPt.lng - last.lng) > 0.00001) {
+                path = [...path, { lat: last.lat, lng: last.lng, timestamp: last.timestamp || new Date(), address: last.address }];
+              }
+            }
+          }
+
           const totalKm = typeof l.totalDistance === 'number' ? l.totalDistance : (l.officialDistance || 0);
 
           locMap[empIdStr] = {
@@ -269,51 +439,79 @@ export default function AdminLiveMap() {
           }
         }
       });
+
+      prevLocationsRef.current = locMap;
       setLocations(locMap);
 
       // Auto-select first active tracking employee if none selected on initial load
       const allLocs = Object.entries(locMap);
-      if (allLocs.length > 0 && !selected && !silent) {
-        const [firstEmpId, firstLoc] = allLocs[0];
+      if (allLocs.length > 0 && !selectedRef.current && !isBackground) {
+        const activeEntry = allLocs.find(([, loc]) => loc.isActive);
+        const [firstEmpId, firstLoc] = activeEntry || allLocs[0];
         setSelected(firstEmpId);
-        setFlyCenter([firstLoc.lat, firstLoc.lng]);
-        setFlyZoom(14);
+        selectedRef.current = firstEmpId;
+        if (firstLoc?.lat && firstLoc?.lng) {
+          setFlyCenter([firstLoc.lat, firstLoc.lng]);
+          setFlyZoom(14);
+        }
       }
     } catch {
-      if (!silent) toast.error("Failed to load live data");
+      if (!isBackground) toast.error("Failed to load live data");
     } finally {
-      if (!silent) setLoading(false);
+      if (!isBackground || !initialLoadDoneRef.current) {
+        setLoading(false);
+        initialLoadDoneRef.current = true;
+      }
     }
   };
 
   useEffect(() => {
     fetchLive(false);
 
-    // Continuous 5-second background sync guarantees real-time refresh even across multiple servers
+    // Continuous 5-second background sync without UI flicker or screen blinking
     const pollTimer = setInterval(() => {
-      fetchLive(true);
+      isPollingRef.current = true;
+      fetchLive(true).finally(() => {
+        isPollingRef.current = false;
+      });
     }, 5000);
 
     const socket = getSocket();
     if (socket) {
       socket.on("employee_location", (data) => {
         const empIdStr = String(data.employeeId);
+        // Ignore :sync: offline backfill events from corrupting live path
+        if (data.eventId && String(data.eventId).includes(':sync:')) {
+          return;
+        }
+
         setLocations(prev => {
           const existing = prev[empIdStr] || prev[data.employeeId] || {};
           const incomingDist = typeof data.totalDistance === 'number'
             ? data.totalDistance
             : (typeof data.sessionDistance === 'number' ? data.sessionDistance : 0);
 
-          const updatedDist = Math.max(Number(existing.totalDistance) || 0, Number(incomingDist) || 0);
+          // Remove distance latching — use clean incoming distance from authoritative server
+          const updatedDist = incomingDist > 0 ? incomingDist : (Number(existing.totalDistance) || 0);
+
+          let updatedPath = existing.path || [];
+          if (data.lat && data.lng) {
+            const lat = Number(data.lat);
+            const lng = Number(data.lng);
+            if (Number.isFinite(lat) && Number.isFinite(lng) && !isNaN(lat) && !isNaN(lng)) {
+              const lastPt = updatedPath[updatedPath.length - 1];
+              if (!lastPt || Math.abs(lastPt.lat - lat) > 0.00001 || Math.abs(lastPt.lng - lng) > 0.00001) {
+                updatedPath = [...updatedPath, { lat, lng, timestamp: new Date(), address: data.address, eventId: data.eventId }];
+              }
+            }
+          }
 
           return {
             ...existing,
             ...data,
             totalDistance: updatedDist,
             isActive: true,
-            path: data.lat && data.lng
-              ? [...(existing.path || []), { lat: data.lat, lng: data.lng, timestamp: new Date() }]
-              : (existing.path || [])
+            path: updatedPath
           };
         });
 
@@ -393,6 +591,7 @@ export default function AdminLiveMap() {
     const empIdStr = String(empId);
     const newSelected = empIdStr === selected ? null : empIdStr;
     setSelected(newSelected);
+    selectedRef.current = newSelected;
     setSidebarOpen(false);
 
     if (newSelected) {
@@ -447,7 +646,7 @@ export default function AdminLiveMap() {
               />
             </div>
             <button
-              onClick={fetchLive}
+              onClick={() => fetchLive(false)}
               className="btn-secondary py-1.5 px-3 flex items-center gap-1.5 text-xs font-bold"
             >
               <RefreshCw className={"w-3.5 h-3.5 " + (loading ? "animate-spin" : "")} />
@@ -500,7 +699,9 @@ export default function AdminLiveMap() {
               {flyCenter && <FlyTo center={flyCenter} zoom={flyZoom} />}
 
               {/* Markers for all active location pins */}
-              {Object.entries(locations).map(([empId, loc]) => {
+              {Object.entries(locations)
+                .filter(([, loc]) => loc && typeof loc.lat === 'number' && typeof loc.lng === 'number' && !isNaN(loc.lat) && !isNaN(loc.lng))
+                .map(([empId, loc]) => {
                 const color = getEmpColor(empId);
                 const empData = employees.find(e => String(e._id) === String(empId));
                 const isStationary = stationaryEmps.has(String(empId));
@@ -511,7 +712,7 @@ export default function AdminLiveMap() {
                     key={empId}
                     position={[loc.lat, loc.lng]}
                     zIndexOffset={isSelected ? 2000 : isStationary ? 1000 : 0}
-                    icon={createEmployeeIcon(loc.name || empData?.name, color, loc.isActive, loc.avatar || empData?.avatar, isStationary)}
+                    icon={getEmployeeMarkerIcon(loc.name || empData?.name, color, loc.isActive, loc.avatar || empData?.avatar, isStationary)}
                     eventHandlers={{ click: () => handleSelectEmployee(empId) }}
                   >
                     <Popup className="custom-popup">
@@ -560,28 +761,12 @@ export default function AdminLiveMap() {
                 );
               })}
 
-              {/* Selected polyline path & start/end pin */}
-              {selectedLoc && selectedLoc.path?.length > 1 && (
-                <>
-                  <Polyline
-                    positions={selectedLoc.path.map(p => [p.lat, p.lng])}
-                    pathOptions={{ color: selectedColor, weight: 14, opacity: 0.15, lineCap: "round" }}
-                  />
-                  <Polyline
-                    positions={selectedLoc.path.map(p => [p.lat, p.lng])}
-                    pathOptions={{ color: selectedColor, weight: 5, opacity: 0.95, lineCap: "round", lineJoin: "round" }}
-                  />
-                  <Polyline
-                    positions={selectedLoc.path.map(p => [p.lat, p.lng])}
-                    pathOptions={{ color: "#ffffff", weight: 1.5, opacity: 0.7, dashArray: "6, 12", lineCap: "round" }}
-                  />
-                  <Marker position={[selectedLoc.path[0].lat, selectedLoc.path[0].lng]} icon={createStartIcon()} />
-                  <Marker
-                    position={[selectedLoc.path[selectedLoc.path.length - 1].lat, selectedLoc.path[selectedLoc.path.length - 1].lng]}
-                    icon={createCurrentIcon(selectedColor)}
-                    zIndexOffset={3000}
-                  />
-                </>
+              {/* Selected polyline path & start/end pin (smooth Leaflet layer without DOM re-creation) */}
+              {selectedLoc && (
+                <LivePolylineLayer
+                  path={selectedLoc.path}
+                  color={selectedColor}
+                />
               )}
             </MapContainer>
 
