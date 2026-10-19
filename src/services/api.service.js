@@ -3,8 +3,8 @@ import axios from 'axios';
 // ==========================================
 // BACKEND API BASE CONFIGURATION (DUAL ENV)
 // ==========================================
-// export const DEV_API_URL = 'http://localhost:5001/api';
-export const DEV_API_URL = 'https://field-backend-monitor-web-ym7d.onrender.com/api';
+export const DEV_API_URL = 'http://localhost:5001/api';
+// export const DEV_API_URL = 'https://field-backend-monitor-web-ym7d.onrender.com/api';
  
 //  ?dfhbkj
 const resolveApiBase = () => {
@@ -162,7 +162,7 @@ export const trackingAPI = {
   update: (data) => API.post('/tracking/update', data),
   stop: (data) => API.post('/tracking/stop', data),
   getToday: () => API.get('/tracking/today'),
-  getLive: () => API.get('/tracking/live'),
+  getLive: (params) => API.get('/tracking/live', { params }),
   getLiveLocations: () => API.get('/tracking/live-locations'),
   getSession: (id) => API.get(`/tracking/session/${id}`),
   geocode: (lat, lng) => API.get(`/tracking/geocode?lat=${lat}&lng=${lng}`),

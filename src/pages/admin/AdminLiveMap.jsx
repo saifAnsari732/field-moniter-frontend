@@ -303,6 +303,7 @@ export default function AdminLiveMap() {
   const [locations, setLocations] = useState({});
   const [addresses, setAddresses] = useState({});
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [flyCenter, setFlyCenter] = useState(null);
   const [flyZoom, setFlyZoom] = useState(14);
   const [searchQuery, setSearchQuery] = useState("");
@@ -374,18 +375,21 @@ export default function AdminLiveMap() {
     setAddresses(prev => ({ ...prev, [String(empId)]: addr }));
   }, []);
 
-  const fetchLive = async (silent = false) => {
+  const fetchLive = async (silent = false, forceFresh = false) => {
     const isBackground = silent || isPollingRef.current;
-    // Loading indicator only shown on initial full load, NOT on background polling (stops map flickering)
-    if (!isBackground && !initialLoadDoneRef.current) {
+    if (forceFresh) {
+      setRefreshing(true);
+    } else if (!isBackground && !initialLoadDoneRef.current) {
       setLoading(true);
     }
     try {
-      const { data } = await trackingAPI.getLive();
-      setEmployees(data.employees || []);
+      const params = forceFresh ? { t: Date.now() } : {};
+      const { data } = await trackingAPI.getLive(params);
+      const rawEmployees = data.employees || [];
       const locMap = {};
+
       (data.locations || []).forEach(l => {
-        const empId = l.employee?._id || l.employee;
+        const empId = l.employee?._id || l.employee || l.employeeId;
         if (empId) {
           const empIdStr = String(empId);
           const rawCoords = l.coordinates && l.coordinates.length > 0
@@ -413,7 +417,10 @@ export default function AdminLiveMap() {
             }
           }
 
-          const totalKm = typeof l.totalDistance === 'number' ? l.totalDistance : (l.officialDistance || 0);
+          const incomingKm = typeof l.totalDistance === 'number' ? l.totalDistance : (Number(l.officialDistance) || 0);
+          const prevKm = prevLoc?.totalDistance || 0;
+          // Never drop a higher valid distance to 0 on temporary polling blip
+          const totalKm = incomingKm > 0 ? incomingKm : prevKm;
 
           locMap[empIdStr] = {
             ...last,
@@ -425,6 +432,7 @@ export default function AdminLiveMap() {
             avatar: l.employee?.avatar || l.avatar,
             department: l.employee?.department || l.department,
             totalDistance: totalKm,
+            officialDistance: totalKm,
             startTime: l.startTime || first.timestamp || new Date(),
             startAddress: l.startAddress || first.address,
             sessionId: l.sessionId,
@@ -440,8 +448,24 @@ export default function AdminLiveMap() {
         }
       });
 
-      prevLocationsRef.current = locMap;
-      setLocations(locMap);
+      // Safely merge with previous locations so active socket tracking updates are never wiped
+      prevLocationsRef.current = { ...prevLocationsRef.current, ...locMap };
+      setLocations(prev => ({ ...prev, ...locMap }));
+
+      // Attach authoritative live distance directly to employees list
+      setEmployees(rawEmployees.map(emp => {
+        const empIdStr = String(emp._id);
+        const l = locMap[empIdStr] || prevLocationsRef.current[empIdStr];
+        const dist = (l && typeof l.totalDistance === 'number' && l.totalDistance > 0)
+          ? l.totalDistance
+          : (Number(emp.totalDistanceToday) || Number(emp.todayKm) || Number(emp.totalDistance) || 0);
+        return {
+          ...emp,
+          todayKm: dist,
+          totalDistanceToday: dist,
+          isTracking: l ? l.isActive : emp.isTracking
+        };
+      }));
 
       // Auto-select first active tracking employee if none selected on initial load
       const allLocs = Object.entries(locMap);
@@ -455,9 +479,14 @@ export default function AdminLiveMap() {
           setFlyZoom(14);
         }
       }
+
+      if (forceFresh) {
+        toast.success("Live data refreshed");
+      }
     } catch {
       if (!isBackground) toast.error("Failed to load live data");
     } finally {
+      setRefreshing(false);
       if (!isBackground || !initialLoadDoneRef.current) {
         setLoading(false);
         initialLoadDoneRef.current = true;
@@ -507,16 +536,26 @@ export default function AdminLiveMap() {
           }
 
           return {
-            ...existing,
-            ...data,
-            totalDistance: updatedDist,
-            isActive: true,
-            path: updatedPath
+            ...prev,
+            [empIdStr]: {
+              ...existing,
+              ...data,
+              totalDistance: updatedDist,
+              officialDistance: updatedDist,
+              isActive: true,
+              path: updatedPath
+            }
           };
         });
 
-        // Also ensure employee object in list is marked isTracking / isOnline
-        setEmployees(prev => prev.map(e => String(e._id) === empIdStr ? { ...e, isTracking: true, isOnline: true } : e));
+        // Also ensure employee object in list is marked isTracking / isOnline with updated KM
+        setEmployees(prev => prev.map(e => String(e._id) === empIdStr ? {
+          ...e,
+          isTracking: true,
+          isOnline: true,
+          todayKm: (typeof data.totalDistance === 'number' && data.totalDistance > 0) ? data.totalDistance : e.todayKm,
+          totalDistanceToday: (typeof data.totalDistance === 'number' && data.totalDistance > 0) ? data.totalDistance : e.totalDistanceToday
+        } : e));
 
         if (isReadableAddress(data.address)) {
           setAddresses(prev => ({ ...prev, [empIdStr]: data.address }));
@@ -646,11 +685,13 @@ export default function AdminLiveMap() {
               />
             </div>
             <button
-              onClick={() => fetchLive(false)}
-              className="btn-secondary py-1.5 px-3 flex items-center gap-1.5 text-xs font-bold"
+              onClick={() => fetchLive(false, true)}
+              disabled={refreshing}
+              className="btn-secondary py-1.5 px-3 flex items-center gap-1.5 text-xs font-bold cursor-pointer transition hover:bg-slate-100 disabled:opacity-50"
+              title="Click to refresh latest employee KM & coordinates"
             >
-              <RefreshCw className={"w-3.5 h-3.5 " + (loading ? "animate-spin" : "")} />
-              <span className="hidden sm:inline">Refresh</span>
+              <RefreshCw className={"w-3.5 h-3.5 " + (refreshing ? "animate-spin text-primary-600" : "")} />
+              <span className="hidden sm:inline">{refreshing ? "Refreshing..." : "Refresh"}</span>
             </button>
           </div>
         </div>
@@ -852,7 +893,11 @@ export default function AdminLiveMap() {
                         <span className="text-[10px] font-black uppercase tracking-wider">Distance</span>
                       </div>
                       <p className="text-lg font-black text-[var(--text-main)] leading-none">
-                        {(selectedLoc?.totalDistance || 0).toFixed(2)}
+                        {(
+                          (typeof selectedLoc?.totalDistance === 'number' && selectedLoc.totalDistance > 0)
+                            ? selectedLoc.totalDistance
+                            : (Number(selectedLoc?.officialDistance) || Number(selectedEmp?.todayKm) || Number(selectedEmp?.totalDistanceToday) || Number(selectedEmp?.totalDistance) || 0)
+                        ).toFixed(2)}
                       </p>
                       <p className="text-[9px] font-bold text-emerald-600 mt-0.5">kilometers today</p>
                     </div>
@@ -1143,7 +1188,11 @@ export default function AdminLiveMap() {
                               (isActiveTracking ? "text-emerald-600" : "text-[var(--text-muted)]")
                             }
                           >
-                            {(loc?.totalDistance || 0).toFixed(2)} km
+                            {(
+                              (typeof loc?.totalDistance === 'number' && loc.totalDistance > 0)
+                                ? loc.totalDistance
+                                : (Number(loc?.officialDistance) || Number(emp?.todayKm) || Number(emp?.totalDistanceToday) || Number(emp?.totalDistance) || 0)
+                            ).toFixed(2)} km
                           </span>
                         </div>
                         <p className="text-[var(--text-muted)] text-[10px] font-medium truncate">
