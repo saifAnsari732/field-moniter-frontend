@@ -21,12 +21,15 @@ import {
   Plus,
   Compass,
   ClipboardList,
-  Receipt,
+  Route,
+  Navigation,
+  Phone,
   BarChart3,
   Loader2,
   Sparkles,
   CreditCard,
   AlertTriangle,
+  Receipt,
 } from 'lucide-react';
 import {
   BarChart,
@@ -127,9 +130,16 @@ export default function AdminDashboard() {
               manager: e.manager?.name || e.managerName || 'Admin Assigned',
               status: e.isTracking ? 'Tracking' : e.isOnline ? 'Online' : 'Offline',
               isTracking: Boolean(e.isTracking),
+              speed: Number(e.speed || 0),
+              motionState: e.motionState || (e.isTracking ? 'MOVING' : 'OFFLINE'),
+              todayKm: (Number(e.todayKm ?? e.totalDistanceToday ?? e.totalDistance ?? 0)).toFixed(2),
+              checkIn: e.lastCheckIn
+                ? new Date(e.lastCheckIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                : (e.isTracking ? 'On Duty' : '—'),
               lastActive: e.lastSeen
                 ? new Date(e.lastSeen).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                 : 'Recently',
+              phone: e.phone,
             }));
             setRecentEmployees(mappedRecent);
           } else {
@@ -146,9 +156,16 @@ export default function AdminDashboard() {
                   manager: e.manager?.name || e.managerName || 'Admin Assigned',
                   status: e.isTracking ? 'Tracking' : e.isOnline ? 'Online' : 'Offline',
                   isTracking: Boolean(e.isTracking),
+                  speed: Number(e.speed || 0),
+                  motionState: e.motionState || (e.isTracking ? 'MOVING' : 'OFFLINE'),
+                  todayKm: (Number(e.todayKm ?? e.totalDistanceToday ?? e.totalDistance ?? 0)).toFixed(2),
+                  checkIn: e.lastCheckIn
+                    ? new Date(e.lastCheckIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                    : (e.isTracking ? 'On Duty' : '—'),
                   lastActive: e.lastSeen
                     ? new Date(e.lastSeen).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                     : 'Recently',
+                  phone: e.phone,
                 }));
                 setRecentEmployees(mapped);
               }
@@ -579,51 +596,125 @@ export default function AdminDashboard() {
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs border-collapse">
                 <thead>
-                  <tr className="border-b border-slate-100 text-slate-400 font-semibold uppercase">
-                    <th className="py-2.5 px-3">Name</th>
-                    <th className="py-2.5 px-3">Employee ID</th>
-                    <th className="py-2.5 px-3">Department</th>
-                    <th className="py-2.5 px-3">Manager</th>
-                    <th className="py-2.5 px-3">Status</th>
-                    <th className="py-2.5 px-3">Last Active</th>
-                    <th className="py-2.5 px-3 text-right">Actions</th>
+                  <tr className="border-b border-slate-100 text-slate-400 font-semibold uppercase tracking-wider text-[11px]">
+                    <th className="py-3 px-3">Employee</th>
+                    <th className="py-3 px-3">ID & Manager</th>
+                    <th className="py-3 px-3">Status & Motion</th>
+                    <th className="py-3 px-3">Today's Travel</th>
+                    <th className="py-3 px-3">Check-In</th>
+                    <th className="py-3 px-3 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-slate-700">
                   {recentEmployees.length > 0 ? (
                     recentEmployees.map((emp) => (
-                      <tr key={emp.id} className="hover:bg-slate-50/70">
-                        <td className="py-3 px-3 font-semibold text-slate-900 flex items-center gap-2.5">
-                          <Avatar
-                            src={emp.avatar}
-                            name={emp.name}
-                            size="xs"
-                            status={emp.status === 'Online'}
-                          />
-                          <span>{emp.name}</span>
+                      <tr key={emp.id} className="hover:bg-slate-50/70 transition-colors">
+                        {/* Employee Avatar + Name + Dept */}
+                        <td className="py-3 px-3 font-semibold text-slate-900">
+                          <div className="flex items-center gap-2.5">
+                            <Avatar
+                              src={emp.avatar}
+                              name={emp.name}
+                              size="xs"
+                              status={emp.status === 'Tracking' || emp.status === 'Online'}
+                            />
+                            <div className="min-w-0">
+                              <div className="font-bold text-slate-900 truncate leading-snug">{emp.name}</div>
+                              <div className="text-[10px] text-slate-400 font-normal truncate">{emp.dept}</div>
+                            </div>
+                          </div>
                         </td>
-                        <td className="py-3 px-3 font-mono text-slate-500">{emp.empId}</td>
-                        <td className="py-3 px-3">{emp.dept}</td>
-                        <td className="py-3 px-3">{emp.manager}</td>
+
+                        {/* ID Badge & Manager */}
                         <td className="py-3 px-3">
-                          <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full font-bold text-[10px] ${
-                            emp.status === 'Online' ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'
-                          }`}>
-                            <span className={`w-1.5 h-1.5 rounded-full ${emp.status === 'Online' ? 'bg-emerald-500' : 'bg-rose-500'}`}></span>
-                            {emp.status}
-                          </span>
+                          <div className="font-mono text-[11px] font-semibold text-slate-700 bg-slate-100 px-2 py-0.5 rounded w-fit border border-slate-200/60 mb-0.5">
+                            {emp.empId}
+                          </div>
+                          <div className="text-[10px] text-slate-400 truncate max-w-[130px]" title={emp.manager}>
+                            Mgr: {emp.manager}
+                          </div>
                         </td>
-                        <td className="py-3 px-3 text-slate-500">{emp.lastActive}</td>
+
+                        {/* Status & Motion State */}
+                        <td className="py-3 px-3">
+                          <div className="flex flex-col gap-1 items-start">
+                            <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full font-bold text-[10px] border ${
+                              emp.status === 'Tracking'
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                : emp.status === 'Online'
+                                ? 'bg-sky-50 text-sky-700 border-sky-200'
+                                : 'bg-slate-50 text-slate-500 border-slate-200'
+                            }`}>
+                              <span className={`w-1.5 h-1.5 rounded-full ${
+                                emp.status === 'Tracking'
+                                  ? 'bg-emerald-500 animate-pulse'
+                                  : emp.status === 'Online'
+                                  ? 'bg-sky-500'
+                                  : 'bg-slate-400'
+                              }`} />
+                              {emp.status}
+                            </span>
+                            {emp.isTracking && (
+                              <span className="text-[10px] font-semibold text-slate-500 flex items-center gap-1">
+                                <span className={`w-1 h-1 rounded-full ${emp.speed > 0 ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                                {emp.speed > 0 ? `${emp.speed} km/h` : 'At Spot'}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+
+                        {/* Today's Travel KM */}
+                        <td className="py-3 px-3">
+                          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-50/80 border border-indigo-100 text-indigo-700 font-bold font-mono text-xs shadow-xs">
+                            <Route className="w-3.5 h-3.5 text-indigo-600" />
+                            <span>{emp.todayKm} KM</span>
+                          </div>
+                        </td>
+
+                        {/* Check-In / Duty Time */}
+                        <td className="py-3 px-3">
+                          <div className="flex items-center gap-1.5 text-slate-600 font-medium">
+                            <Clock className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+                            <span>{emp.checkIn}</span>
+                          </div>
+                          <div className="text-[10px] text-slate-400 mt-0.5">
+                            Last: {emp.lastActive}
+                          </div>
+                        </td>
+
+                        {/* Quick Actions */}
                         <td className="py-3 px-3 text-right">
-                          <button onClick={() => navigate('/admin/employees')} className="text-slate-400 hover:text-slate-600 p-1">
-                            <MoreVertical className="w-4 h-4" />
-                          </button>
+                          <div className="inline-flex items-center justify-end gap-1.5">
+                            {emp.phone && (
+                              <a
+                                href={`tel:${emp.phone}`}
+                                title={`Call ${emp.name} (${emp.phone})`}
+                                className="p-1.5 rounded-lg bg-slate-50 hover:bg-emerald-50 text-slate-500 hover:text-emerald-600 border border-slate-200/80 transition-colors"
+                              >
+                                <Phone className="w-3.5 h-3.5" />
+                              </a>
+                            )}
+                            <button
+                              onClick={() => navigate(`/admin/live-map?emp=${emp.id}`)}
+                              title="Live Route & Telemetry"
+                              className="p-1.5 rounded-lg bg-slate-50 hover:bg-blue-50 text-slate-500 hover:text-blue-600 border border-slate-200/80 transition-colors"
+                            >
+                              <Navigation className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => navigate('/admin/employees')}
+                              title="View Employee Profile"
+                              className="p-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-400 hover:text-slate-600 border border-slate-200/80 transition-colors"
+                            >
+                              <MoreVertical className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))
                   ) : (
                     <tr>
-                      <td colSpan="7" className="py-8 text-center text-xs text-slate-400">
+                      <td colSpan="6" className="py-8 text-center text-xs text-slate-400">
                         {loading ? 'Loading team records from database...' : 'No employees found.'}
                       </td>
                     </tr>
