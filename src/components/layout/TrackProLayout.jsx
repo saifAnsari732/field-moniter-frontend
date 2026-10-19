@@ -31,6 +31,12 @@ import {
   Tag,
   Activity,
   Server,
+  Headphones,
+  PhoneCall,
+  MessageSquare,
+  Copy,
+  ExternalLink,
+  Check,
 } from 'lucide-react';
 import Avatar from '../shared/Avatar';
 import BroadcastAlertPopup from '../shared/BroadcastAlertPopup';
@@ -43,6 +49,15 @@ export default function KisanConnectLayout({ children }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showOrgDropdown, setShowOrgDropdown] = useState(false);
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
+  const [showSupportModal, setShowSupportModal] = useState(false);
+  const [copiedPhone, setCopiedPhone] = useState(false);
+
+  const handleCopyPhone = () => {
+    navigator.clipboard.writeText('9511450914');
+    setCopiedPhone(true);
+    toast.success('Support hotline copied to clipboard!');
+    setTimeout(() => setCopiedPhone(false), 2000);
+  };
 
   const userRole = user?.role ? user.role.toUpperCase() : 'EMPLOYEE';
   const isSuperAdmin = userRole === 'SUPER_ADMIN' || userRole === 'SUPERADMIN';
@@ -218,6 +233,30 @@ export default function KisanConnectLayout({ children }) {
 
         {/* Bottom Sidebar: Organization Switcher / SuperAdmin Badge & User Profile */}
         <div className="p-3.5 border-t border-slate-100 space-y-2.5 bg-slate-50/50 flex-shrink-0">
+          
+          {/* Highlighted Rose SUPPORT Button */}
+          <button
+            type="button"
+            onClick={() => setShowSupportModal(true)}
+            className="w-full flex items-center justify-between p-2.5 px-3.5 rounded-2xl bg-gradient-to-r from-rose-500 via-rose-600 to-pink-600 hover:from-rose-600 hover:to-pink-700 text-white font-bold text-xs shadow-md shadow-rose-500/25 hover:shadow-lg hover:shadow-rose-500/35 transition-all duration-150 active:scale-[0.98] group cursor-pointer border border-rose-400/30"
+          >
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-8 h-8 rounded-xl bg-white/20 backdrop-blur-xs flex items-center justify-center text-white shrink-0 shadow-2xs">
+                <Headphones className="w-4 h-4 animate-pulse" />
+              </div>
+              <div className="text-left min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <span className="font-black tracking-wider uppercase text-xs leading-tight">SUPPORT</span>
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                </div>
+                <span className="text-[10px] text-rose-100 font-semibold block leading-tight truncate">+91 9511450914</span>
+              </div>
+            </div>
+            <span className="px-2.5 py-1 rounded-full bg-white text-rose-700 font-black text-[10px] uppercase tracking-wider shadow-2xs group-hover:scale-105 transition-transform shrink-0">
+              HELP
+            </span>
+          </button>
+
           {isSuperAdmin ? (
             /* Super Admin Status Card */
             <div className="p-3 bg-white border border-rose-200/80 rounded-2xl flex items-center justify-between shadow-2xs">
@@ -387,6 +426,109 @@ export default function KisanConnectLayout({ children }) {
         {/* Screen Content Outlet */}
         <main className="flex-1 p-4 sm:p-6 overflow-y-auto w-full min-w-0 print:p-0 print:m-0 print:overflow-visible">{children}</main>
       </div>
+
+      {/* ─── 24/7 PRIORITY SUPPORT MODAL ────────────────────────────────── */}
+      {showSupportModal && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="max-w-md w-full bg-white rounded-3xl border border-slate-200 shadow-2xl p-6 sm:p-7 space-y-5 relative animate-in fade-in zoom-in-95 duration-150">
+            {/* Close Button */}
+            <button
+              onClick={() => setShowSupportModal(false)}
+              className="absolute top-5 right-5 p-1.5 rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            {/* Header */}
+            <div className="flex items-start gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-rose-50 border border-rose-100 text-rose-600 flex items-center justify-center shrink-0 shadow-2xs">
+                <Headphones className="w-6 h-6 animate-pulse" />
+              </div>
+              <div>
+                <span className="text-[10px] font-black uppercase tracking-wider bg-rose-100 text-rose-700 px-2.5 py-0.5 rounded-full border border-rose-200">
+                  Priority Support
+                </span>
+                <h3 className="text-lg font-black text-slate-900 mt-1">
+                  KisanConnect Helpdesk
+                </h3>
+                <p className="text-xs text-slate-500 font-medium">
+                  Direct support for field operations, GPS tracking & account queries.
+                </p>
+              </div>
+            </div>
+
+            {/* Support Actions */}
+            <div className="space-y-3 pt-1">
+              {/* Direct Call Button */}
+              <a
+                href="tel:9511450914"
+                className="w-full flex items-center justify-between p-3.5 rounded-2xl bg-gradient-to-r from-rose-500 to-rose-600 hover:from-rose-600 hover:to-rose-700 text-white font-bold text-sm shadow-md shadow-rose-500/25 transition-all duration-150 active:scale-[0.99] group cursor-pointer"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center">
+                    <PhoneCall className="w-4 h-4" />
+                  </div>
+                  <div className="text-left">
+                    <span className="block text-[10px] uppercase tracking-wider font-extrabold text-rose-100">Direct Helpline</span>
+                    <span className="text-sm font-black">+91 9511450914</span>
+                  </div>
+                </div>
+                <span className="px-3 py-1 rounded-full bg-white text-rose-700 font-black text-xs uppercase shadow-xs group-hover:scale-105 transition-transform">
+                  Call Now
+                </span>
+              </a>
+
+              {/* WhatsApp Support Button */}
+              <a
+                href="https://wa.me/919511450914?text=Hello%20KisanConnect%20Support%2C%20I%20need%20assistance%20with%20my%20account."
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full flex items-center justify-between p-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm shadow-md shadow-emerald-600/20 transition-all duration-150 active:scale-[0.99] group cursor-pointer"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center">
+                    <MessageSquare className="w-4 h-4" />
+                  </div>
+                  <div className="text-left">
+                    <span className="block text-[10px] uppercase tracking-wider font-extrabold text-emerald-100">WhatsApp Chat</span>
+                    <span className="text-sm font-black">+91 9511450914</span>
+                  </div>
+                </div>
+                <span className="px-3 py-1 rounded-full bg-white text-emerald-700 font-black text-xs uppercase shadow-xs group-hover:scale-105 transition-transform flex items-center gap-1">
+                  <span>Chat</span>
+                  <ExternalLink className="w-3 h-3" />
+                </span>
+              </a>
+
+              {/* Copy Phone Number Quick Action */}
+              <button
+                type="button"
+                onClick={handleCopyPhone}
+                className="w-full flex items-center justify-between p-3 rounded-2xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 font-bold text-xs transition cursor-pointer"
+              >
+                <div className="flex items-center gap-2.5">
+                  <Copy className="w-4 h-4 text-slate-400" />
+                  <span>Copy Phone Number</span>
+                </div>
+                {copiedPhone ? (
+                  <span className="text-emerald-600 flex items-center gap-1 font-bold text-xs">
+                    <Check className="w-3.5 h-3.5" /> Copied!
+                  </span>
+                ) : (
+                  <span className="text-slate-400 font-mono font-bold">9511450914</span>
+                )}
+              </button>
+            </div>
+
+            {/* Operating Hours Note */}
+            <div className="pt-2 text-center border-t border-slate-100">
+              <p className="text-[11px] text-slate-400 font-semibold">
+                Available Monday – Saturday (9:00 AM – 8:00 PM IST)
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
