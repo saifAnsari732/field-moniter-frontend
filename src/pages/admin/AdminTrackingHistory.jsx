@@ -59,6 +59,141 @@ const stopIcon = L.divIcon({
   iconAnchor: [12, 12],
 });
 
+// ─── AGTRIE-X SPATIAL STOPPAGE CLUSTERING (HISTORY ENGINE) ────────────
+function haversineMeters(c1, c2) {
+  if (!c1 || !c2 || typeof c1.lat !== 'number' || typeof c2.lat !== 'number') return 0;
+  const R = 6371000;
+  const dLat = (c2.lat - c1.lat) * Math.PI / 180;
+  const dLng = (c2.lng - c1.lng) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(c1.lat * Math.PI / 180) * Math.cos(c2.lat * Math.PI / 180) *
+            Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function formatDurationMinutes(mins) {
+  if (!mins || mins < 1) return "< 1m";
+  const m = Math.round(mins);
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  const remM = m % 60;
+  return remM > 0 ? `${h}h ${remM}m` : `${h}h`;
+}
+
+function detectStoppages(path, minDurationMinutes = 3, maxRadiusMeters = 50) {
+  if (!path || !Array.isArray(path) || path.length < 2) return [];
+
+  const valid = path.filter(p => p && typeof p.lat === 'number' && typeof p.lng === 'number' && !isNaN(p.lat) && !isNaN(p.lng) && p.timestamp);
+  if (valid.length < 2) return [];
+
+  const stoppages = [];
+  let cluster = [valid[0]];
+
+  for (let i = 1; i < valid.length; i++) {
+    const pt = valid[i];
+    const anchor = cluster[0];
+    const distToAnchor = haversineMeters(anchor, pt);
+
+    if (distToAnchor <= maxRadiusMeters) {
+      cluster.push(pt);
+    } else {
+      finalizeCluster(cluster, stoppages, minDurationMinutes, valid);
+      cluster = [pt];
+    }
+  }
+
+  finalizeCluster(cluster, stoppages, minDurationMinutes, valid);
+
+  return stoppages.map((s, idx) => ({ ...s, stopNumber: idx + 1 }));
+}
+
+function finalizeCluster(cluster, stoppages, minDurationMinutes, fullPath) {
+  if (cluster.length < 2) return;
+  const first = cluster[0];
+  const last = cluster[cluster.length - 1];
+
+  const tStart = new Date(first.timestamp).getTime();
+  const tEnd = new Date(last.timestamp).getTime();
+  if (isNaN(tStart) || isNaN(tEnd)) return;
+
+  const durationMin = (tEnd - tStart) / 60000;
+  if (durationMin >= minDurationMinutes) {
+    const avgLat = cluster.reduce((sum, p) => sum + p.lat, 0) / cluster.length;
+    const avgLng = cluster.reduce((sum, p) => sum + p.lng, 0) / cluster.length;
+    const knownAddress = cluster.find(p => p.address)?.address;
+
+    const endPt = fullPath[fullPath.length - 1];
+    const distToEnd = haversineMeters({ lat: avgLat, lng: avgLng }, endPt);
+    const isNearEnd = distToEnd < 40;
+
+    stoppages.push({
+      lat: avgLat,
+      lng: avgLng,
+      startTime: first.timestamp,
+      endTime: last.timestamp,
+      durationMinutes: Math.round(durationMin),
+      pointCount: cluster.length,
+      address: knownAddress || null,
+      isNearEnd
+    });
+  }
+}
+
+function createStoppageIcon(stopNumber, durationMinutes) {
+  const durationStr = formatDurationMinutes(durationMinutes);
+  return L.divIcon({
+    className: 'agtriex-stoppage-marker',
+    html: `
+      <div style="
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        background: #f59e0b;
+        color: #ffffff;
+        padding: 3px 7px 3px 5px;
+        border-radius: 9999px;
+        border: 2px solid #ffffff;
+        box-shadow: 0 4px 12px rgba(245, 158, 11, 0.45), 0 2px 4px rgba(0,0,0,0.2);
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        font-size: 11px;
+        font-weight: 900;
+        letter-spacing: -0.2px;
+        cursor: pointer;
+        transform: translate(-50%, -100%);
+        pointer-events: auto;
+        white-space: nowrap;
+      ">
+        <span style="
+          width: 16px;
+          height: 16px;
+          border-radius: 50%;
+          background: rgba(255,255,255,0.3);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 9px;
+          font-weight: 900;
+        ">${stopNumber}</span>
+        <span>⏸️ ${durationStr}</span>
+        <div style="
+          position: absolute;
+          bottom: -5px;
+          left: 50%;
+          transform: translateX(-50%);
+          width: 0;
+          height: 0;
+          border-left: 5px solid transparent;
+          border-right: 5px solid transparent;
+          border-top: 5px solid #f59e0b;
+        "></div>
+      </div>
+    `,
+    iconSize: [0, 0],
+    iconAnchor: [0, 0],
+  });
+}
+
 // Pulse Animation Style
 const pulseStyle = document.createElement('style');
 pulseStyle.textContent = `
@@ -1004,20 +1139,36 @@ export default function AdminTrackingHistory() {
                             </Popup>
                           </Marker>
 
-                          {/* Stop Markers */}
-                          {processTimeline(selectedSession)
-                            .filter((e) => e.type === 'Stop' && e.duration >= 15 && typeof e.lat === 'number' && typeof e.lng === 'number')
-                            .map((stop, i) => (
-                              <Marker key={`stop-${i}`} position={[stop.lat, stop.lng]} icon={stopIcon}>
-                                <Popup>
-                                  <div className="p-1 min-w-[150px]">
-                                    <p className="font-bold text-xs text-amber-600">⏸️ Stationary Stop ({stop.duration} min)</p>
-                                    <p className="text-[11px] text-slate-700 mt-0.5">{stop.address || 'Halt location'}</p>
-                                    <p className="text-[10px] text-slate-500 mt-1 font-mono">{new Date(stop.time).toLocaleTimeString()}</p>
+                          {/* Stoppage / Halt Markers along Route (AGTRIE-X Spatial Clustering) */}
+                          {detectStoppages(validCoords, 3, 50).map((stop, i) => (
+                            <Marker
+                              key={`stop-${i}`}
+                              position={[stop.lat, stop.lng]}
+                              icon={createStoppageIcon(stop.stopNumber, stop.durationMinutes)}
+                              zIndexOffset={1500}
+                            >
+                              <Popup className="agtriex-stoppage-popup">
+                                <div className="p-2 min-w-[210px]">
+                                  <div className="flex items-center justify-between gap-2 mb-1.5 pb-1 border-b border-slate-100">
+                                    <span className="inline-flex items-center gap-1 font-black text-xs text-amber-600 bg-amber-500/10 px-2 py-0.5 rounded-md">
+                                      <span>⏸️</span> Halt #{stop.stopNumber}
+                                    </span>
+                                    <span className="text-[11px] font-black text-slate-800 bg-slate-100 px-2 py-0.5 rounded-md">
+                                      {formatDurationMinutes(stop.durationMinutes)}
+                                    </span>
                                   </div>
-                                </Popup>
-                              </Marker>
-                            ))}
+                                  <p className="text-xs font-bold text-slate-800 leading-snug">
+                                    {stop.address || "Stationary location recorded"}
+                                  </p>
+                                  <div className="mt-1.5 pt-1.5 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-500 font-mono">
+                                    <span>{new Date(stop.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}</span>
+                                    <span>→</span>
+                                    <span>{new Date(stop.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}</span>
+                                  </div>
+                                </div>
+                              </Popup>
+                            </Marker>
+                          ))}
                         </>
                       )}
 

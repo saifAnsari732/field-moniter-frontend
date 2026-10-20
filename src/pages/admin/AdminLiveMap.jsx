@@ -25,6 +25,7 @@ import {
   ExternalLink,
   Activity,
   Play,
+  Pause,
   Sparkles,
   Shield,
   Layers,
@@ -40,16 +41,235 @@ import "leaflet.markercluster/dist/MarkerCluster.Default.css";
 
 const COLORS = ["#3b82f6", "#ef4444", "#22c55e", "#f59e0b", "#8b5cf6", "#ec4899", "#06b6d4", "#f97316"];
 
-function createEmployeeIcon(name, color, isActive, avatar, isStationary) {
+
+// ─── AGTRIE-X SPATIAL STOPPAGE & REAL-TIME MOTION ENGINE ──────────────
+function haversineMeters(c1, c2) {
+  if (!c1 || !c2 || typeof c1.lat !== 'number' || typeof c2.lat !== 'number') return 0;
+  const R = 6371000;
+  const dLat = (c2.lat - c1.lat) * Math.PI / 180;
+  const dLng = (c2.lng - c1.lng) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(c1.lat * Math.PI / 180) * Math.cos(c2.lat * Math.PI / 180) *
+            Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function formatDurationMinutes(mins) {
+  if (!mins || mins < 1) return "< 1m";
+  const m = Math.round(mins);
+  if (m < 60) return `${m}m`;
+  const hrs = Math.floor(m / 60);
+  const remM = m % 60;
+  return remM > 0 ? `${hrs}h ${remM}m` : `${hrs}h`;
+}
+
+function formatDurationLong(mins) {
+  if (!mins || mins < 1) return "< 1 min";
+  const m = Math.round(mins);
+  if (m < 60) return `${m} mins`;
+  const hrs = Math.floor(m / 60);
+  const remM = m % 60;
+  return remM > 0 ? `${hrs} hr ${remM} mins` : `${hrs} hr`;
+}
+
+// Detect cluster halts along a movement path
+function detectStoppages(coordinates, minMinutes = 3, clusterRadiusM = 50) {
+  if (!Array.isArray(coordinates) || coordinates.length < 2) return [];
+
+  const coords = coordinates
+    .filter(c => c && typeof c.lat === 'number' && typeof c.lng === 'number' && !isNaN(c.lat) && !isNaN(c.lng) && (!c.eventId || !c.eventId.includes(':sync:')))
+    .sort((a, b) => new Date(a.timestamp || 0) - new Date(b.timestamp || 0));
+
+  if (coords.length < 2) return [];
+
+  const stoppages = [];
+  let clusterStart = coords[0];
+  let clusterLast = coords[0];
+  let clusterPoints = [coords[0]];
+
+  for (let i = 1; i < coords.length; i++) {
+    const pt = coords[i];
+    const distFromStart = haversineMeters(clusterStart, pt);
+
+    if (distFromStart <= clusterRadiusM) {
+      clusterPoints.push(pt);
+      clusterLast = pt;
+    } else {
+      const durationMins = (new Date(clusterLast.timestamp) - new Date(clusterStart.timestamp)) / 60000;
+      if (durationMins >= minMinutes) {
+        const avgLat = clusterPoints.reduce((s, p) => s + p.lat, 0) / clusterPoints.length;
+        const avgLng = clusterPoints.reduce((s, p) => s + p.lng, 0) / clusterPoints.length;
+
+        stoppages.push({
+          stopNumber: stoppages.length + 1,
+          lat: Number(avgLat.toFixed(6)),
+          lng: Number(avgLng.toFixed(6)),
+          startTime: clusterStart.timestamp,
+          endTime: clusterLast.timestamp,
+          durationMinutes: Math.round(durationMins),
+          pointCount: clusterPoints.length,
+          address: clusterLast.address || clusterStart.address || null,
+          isCurrent: false
+        });
+      }
+      clusterStart = pt;
+      clusterLast = pt;
+      clusterPoints = [pt];
+    }
+  }
+
+  // Check final cluster at end of route
+  const finalDurationMins = (new Date(clusterLast.timestamp) - new Date(clusterStart.timestamp)) / 60000;
+  if (finalDurationMins >= minMinutes) {
+    const avgLat = clusterPoints.reduce((s, p) => s + p.lat, 0) / clusterPoints.length;
+    const avgLng = clusterPoints.reduce((s, p) => s + p.lng, 0) / clusterPoints.length;
+
+    stoppages.push({
+      stopNumber: stoppages.length + 1,
+      lat: Number(avgLat.toFixed(6)),
+      lng: Number(avgLng.toFixed(6)),
+      startTime: clusterStart.timestamp,
+      endTime: clusterLast.timestamp,
+      durationMinutes: Math.round(finalDurationMins),
+      pointCount: clusterPoints.length,
+      address: clusterLast.address || clusterStart.address || null,
+      isCurrent: true
+    });
+  }
+
+  return stoppages;
+}
+
+// Evaluate real-time movement state (Moving vs Stopped)
+function getEmployeeMotionStatus(loc, emp) {
+  const isActive = Boolean(loc?.isActive !== false && (loc?.isActive || emp?.isTracking));
+  if (!isActive) {
+    return {
+      status: "OFFLINE",
+      label: "Offline / Not Tracking",
+      isMoving: false,
+      isStopped: false,
+      speedKmh: 0,
+      stoppedMinutes: 0,
+      stoppedStr: "",
+      stoppedLongStr: ""
+    };
+  }
+
+  const speedKmh = Math.round((Number(loc?.speed) || 0) * 3.6);
+  const path = Array.isArray(loc?.path) ? loc.path : [];
+
+  let stoppedMinutes = 0;
+  let isStopped = false;
+
+  if (path.length > 0) {
+    const cleanPath = filterCleanCoords(path);
+    if (cleanPath.length > 0) {
+      const lastPt = cleanPath[cleanPath.length - 1];
+      const lastTs = lastPt.timestamp ? new Date(lastPt.timestamp).getTime() : Date.now();
+
+      let clusterStartTime = lastTs;
+      for (let i = cleanPath.length - 2; i >= 0; i--) {
+        const p = cleanPath[i];
+        if (haversineMeters(lastPt, p) <= 50) {
+          clusterStartTime = p.timestamp ? new Date(p.timestamp).getTime() : clusterStartTime;
+        } else {
+          break;
+        }
+      }
+
+      const durationFromCluster = Math.max(0, Math.round((Date.now() - clusterStartTime) / 60000));
+      const durationFromLastPt = Math.max(0, Math.round((Date.now() - lastTs) / 60000));
+
+      if (speedKmh < 3 || durationFromCluster >= 3) {
+        stoppedMinutes = Math.max(durationFromCluster, durationFromLastPt, 3);
+        isStopped = true;
+      }
+    }
+  }
+
+  if (!isStopped && speedKmh < 3) {
+    const lastUpdate = loc?.updatedAt ? new Date(loc.updatedAt).getTime() : Date.now();
+    const diffMins = Math.round((Date.now() - lastUpdate) / 60000);
+    if (diffMins >= 3) {
+      isStopped = true;
+      stoppedMinutes = diffMins;
+    }
+  }
+
+  if (isStopped) {
+    return {
+      status: "STOPPED",
+      label: `Stopped • ${formatDurationMinutes(stoppedMinutes)}`,
+      isMoving: false,
+      isStopped: true,
+      speedKmh: 0,
+      stoppedMinutes,
+      stoppedStr: formatDurationMinutes(stoppedMinutes),
+      stoppedLongStr: formatDurationLong(stoppedMinutes)
+    };
+  }
+
+  return {
+    status: "MOVING",
+    label: `Moving • ${speedKmh > 0 ? speedKmh : 15} km/h`,
+    isMoving: true,
+    isStopped: false,
+    speedKmh: speedKmh > 0 ? speedKmh : 15,
+    stoppedMinutes: 0,
+    stoppedStr: "",
+    stoppedLongStr: ""
+  };
+}
+
+function createStoppageIcon(durationMinutes, stopNumber) {
+  const durationText = formatDurationMinutes(durationMinutes);
+  return L.divIcon({
+    className: "custom-stoppage-marker",
+    html: `
+      <div style="position:relative;display:flex;flex-direction:column;align-items:center;cursor:pointer;transform:translateY(-100%);">
+        <div style="display:flex;align-items:center;gap:4px;background:#f59e0b;color:#ffffff;font-size:11px;font-weight:900;padding:2.5px 8px;border-radius:9999px;box-shadow:0 3px 12px rgba(245,158,11,0.5);border:2px solid #ffffff;white-space:nowrap;letter-spacing:0.2px;">
+          <span style="font-size:10px;">⏸️</span>
+          <span>${durationText}</span>
+        </div>
+        <div style="width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:6px solid #f59e0b;margin-top:-1px;"></div>
+        <div style="width:6px;height:6px;border-radius:50%;background:#d97706;border:1.5px solid #ffffff;box-shadow:0 1px 4px rgba(0,0,0,0.3);margin-top:1px;"></div>
+      </div>
+    `,
+    iconSize: [60, 30],
+    iconAnchor: [30, 0],
+    popupAnchor: [0, -32]
+  });
+}
+
+function createEmployeeIcon(name, color, isActive, avatar, isStationary, motionInfo) {
   const initial = (name || "?")[0].toUpperCase();
-  const borderColor = isStationary ? "#f59e0b" : isActive ? "#22c55e" : "#94a3b8";
-  const pulseColor = isStationary ? "#f59e0b33" : color + "33";
+  const isStopped = Boolean(isStationary || motionInfo?.isStopped);
+  const borderColor = isStopped ? "#f59e0b" : isActive ? "#10b981" : "#94a3b8";
+  const pulseColor = isStopped ? "#f59e0b33" : "#10b98133";
   const pulseRing = isActive
     ? '<div style="position:absolute;top:-8px;left:-8px;width:52px;height:52px;border-radius:50%;background:' + pulseColor + ';animation:empPulse 2s infinite;"></div>'
     : "";
-  const stationaryBadge = isStationary
-    ? '<div style="position:absolute;top:-4px;right:-4px;width:16px;height:16px;border-radius:50%;background:#f59e0b;border:2px solid #fff;display:flex;align-items:center;justify-content:center;z-index:10;font-size:9px;">!</div>'
-    : "";
+
+  let motionPill = "";
+  if (isActive) {
+    if (isStopped) {
+      const dur = motionInfo?.stoppedStr ? ` ${motionInfo.stoppedStr}` : "";
+      motionPill = `
+        <div style="position:absolute;top:-16px;left:50%;transform:translateX(-50%);background:#f59e0b;color:#ffffff;font-size:9px;font-weight:900;padding:1px 6px;border-radius:9999px;border:1.5px solid #ffffff;white-space:nowrap;box-shadow:0 2px 6px rgba(245,158,11,0.5);display:flex;align-items:center;gap:2px;z-index:25;">
+          <span>⏸️</span><span>${dur || 'Halt'}</span>
+        </div>
+      `;
+    } else {
+      const spd = motionInfo?.speedKmh ? `${motionInfo.speedKmh} km/h` : "Moving";
+      motionPill = `
+        <div style="position:absolute;top:-16px;left:50%;transform:translateX(-50%);background:#10b981;color:#ffffff;font-size:9px;font-weight:900;padding:1px 6px;border-radius:9999px;border:1.5px solid #ffffff;white-space:nowrap;box-shadow:0 2px 6px rgba(16,185,129,0.5);display:flex;align-items:center;gap:2px;z-index:25;">
+          <span>🟢</span><span>${spd}</span>
+        </div>
+      `;
+    }
+  }
+
   const imgContent = avatar
     ? '<img src="' + avatar + '" style="width:100%;height:100%;border-radius:50%;object-fit:cover;" onerror="this.outerHTML=\'<div style=&quot;width:100%;height:100%;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:14px;&quot;>' + initial + '</div>\'" />'
     : '<div style="width:100%;height:100%;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:14px;">' + initial + "</div>";
@@ -57,11 +277,11 @@ function createEmployeeIcon(name, color, isActive, avatar, isStationary) {
     className: "custom-emp-marker",
     html:
       '<div style="position:relative;width:36px;height:44px;">' +
+      motionPill +
       pulseRing +
       '<div style="position:relative;z-index:2;width:36px;height:36px;border-radius:50%;background:' + color + ';border:3px solid ' + borderColor + ';box-shadow:0 3px 12px ' + color + '66;overflow:hidden;">' +
       imgContent +
       "</div>" +
-      stationaryBadge +
       '<div style="position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:9px solid ' + color + ';"></div>' +
       "</div>",
     iconSize: [36, 44],
@@ -142,22 +362,23 @@ function filterCleanCoords(rawCoords) {
 }
 
 const empIconCache = new Map();
-function getEmployeeMarkerIcon(name, color, isActive, avatar, isStationary) {
-  const key = `${name || '?'}_${color}_${isActive ? 1 : 0}_${avatar || ''}_${isStationary ? 1 : 0}`;
+function getEmployeeMarkerIcon(name, color, isActive, avatar, isStationary, motionInfo) {
+  const key = `${name || '?'}_${color}_${isActive ? 1 : 0}_${avatar || ''}_${isStationary ? 1 : 0}_${motionInfo?.isStopped ? 1 : 0}_${motionInfo?.stoppedStr || ''}_${motionInfo?.speedKmh || 0}`;
   if (!empIconCache.has(key)) {
-    empIconCache.set(key, createEmployeeIcon(name, color, isActive, avatar, isStationary));
+    empIconCache.set(key, createEmployeeIcon(name, color, isActive, avatar, isStationary, motionInfo));
   }
   return empIconCache.get(key);
 }
 
 // In-place Leaflet polyline update: updates latLngs directly without unmounting/recreating DOM layers
-function LivePolylineLayer({ path, color }) {
+function LivePolylineLayer({ path, color, stoppages }) {
   const map = useMap();
   const polylineGlowRef = useRef(null);
   const polylineMainRef = useRef(null);
   const polylineDashRef = useRef(null);
   const startMarkerRef = useRef(null);
   const currentMarkerRef = useRef(null);
+  const stoppageMarkersRef = useRef([]);
 
   useEffect(() => {
     if (!map) return;
@@ -171,6 +392,8 @@ function LivePolylineLayer({ path, color }) {
       if (polylineDashRef.current) { map.removeLayer(polylineDashRef.current); polylineDashRef.current = null; }
       if (startMarkerRef.current) { map.removeLayer(startMarkerRef.current); startMarkerRef.current = null; }
       if (currentMarkerRef.current) { map.removeLayer(currentMarkerRef.current); currentMarkerRef.current = null; }
+      stoppageMarkersRef.current.forEach(m => map.removeLayer(m));
+      stoppageMarkersRef.current = [];
       return;
     }
 
@@ -227,7 +450,43 @@ function LivePolylineLayer({ path, color }) {
         currentMarkerRef.current.setIcon(createCurrentIcon(pathColor));
       }
     }
-  }, [map, path, color]);
+
+    // ── RENDER STOPPAGE / HALT MARKERS ON THE PATH ────────────────────────
+    stoppageMarkersRef.current.forEach(m => map.removeLayer(m));
+    stoppageMarkersRef.current = [];
+
+    const stopsToRender = Array.isArray(stoppages) ? stoppages : detectStoppages(cleanCoords, 3, 50);
+    stopsToRender.forEach((stop) => {
+      const isNearEnd = Math.abs(stop.lat - endPt.lat) < 0.0003 && Math.abs(stop.lng - endPt.lng) < 0.0003;
+      if (stop.isCurrent && isNearEnd) return; // Shown on current marker
+
+      const marker = L.marker([stop.lat, stop.lng], {
+        icon: createStoppageIcon(stop.durationMinutes, stop.stopNumber),
+        zIndexOffset: 1500
+      }).addTo(map);
+
+      const startTimeStr = stop.startTime ? new Date(stop.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+      const endTimeStr = stop.endTime ? new Date(stop.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+
+      marker.bindPopup(`
+        <div style="padding: 4px; min-width: 175px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+            <span style="background: #fef3c7; color: #b45309; padding: 2px 7px; border-radius: 6px; font-weight: 800; font-size: 11px;">Halt #${stop.stopNumber}</span>
+            <span style="color: #d97706; font-weight: 900; font-size: 13px;">${formatDurationMinutes(stop.durationMinutes)}</span>
+          </div>
+          <p style="font-size: 11px; color: #334155; margin: 0 0 4px 0; font-weight: 700; line-height: 1.3;">
+            ${stop.address || 'Halt on route'}
+          </p>
+          <p style="font-size: 10px; color: #64748b; font-family: monospace; margin: 0;">
+            🕒 ${startTimeStr} – ${endTimeStr}
+          </p>
+        </div>
+      `, { className: "custom-stop-popup" });
+
+      stoppageMarkersRef.current.push(marker);
+    });
+
+  }, [map, path, color, stoppages]);
 
   useEffect(() => {
     return () => {
@@ -236,6 +495,8 @@ function LivePolylineLayer({ path, color }) {
       if (polylineDashRef.current && map) { map.removeLayer(polylineDashRef.current); polylineDashRef.current = null; }
       if (startMarkerRef.current && map) { map.removeLayer(startMarkerRef.current); startMarkerRef.current = null; }
       if (currentMarkerRef.current && map) { map.removeLayer(currentMarkerRef.current); currentMarkerRef.current = null; }
+      stoppageMarkersRef.current.forEach(m => map.removeLayer(m));
+      stoppageMarkersRef.current = [];
     };
   }, [map]);
 
@@ -331,6 +592,24 @@ export default function AdminLiveMap() {
     return empColorMap.current[id];
   }, []);
 
+  // Derive real-time motion status (Moving vs Stopped) for all employees
+  const motionStatusMap = React.useMemo(() => {
+    const map = {};
+    const stationarySet = new Set();
+
+    employees.forEach(emp => {
+      const empIdStr = String(emp._id);
+      const loc = locations[empIdStr] || locations[emp._id];
+      const status = getEmployeeMotionStatus(loc, emp);
+      map[empIdStr] = status;
+      if (status.isStopped) {
+        stationarySet.add(empIdStr);
+      }
+    });
+
+    return { map, stationarySet };
+  }, [employees, locations]);
+
   // Employees actively tracking
   const trackingEmployees = employees.filter(emp => {
     const empIdStr = String(emp._id);
@@ -352,7 +631,7 @@ export default function AdminLiveMap() {
       const loc = locations[empIdStr] || locations[emp._id];
       return !loc?.isActive && !emp.isTracking;
     }).length,
-    Stationary: Array.from(stationaryEmps).filter(empId => teamList.some(e => String(e._id) === String(empId))).length,
+    Stationary: motionStatusMap.stationarySet.size,
   };
 
   const filteredEmployees = teamList.filter(emp => {
@@ -366,7 +645,7 @@ export default function AdminLiveMap() {
     if (activeFilter === "Active") return loc?.isActive || emp.isTracking || ((loc?.totalDistance || 0) > 0);
     if (activeFilter === "All") return true;
     if (activeFilter === "Away") return !loc?.isActive && !emp.isTracking;
-    if (activeFilter === "Stationary") return stationaryEmps.has(empIdStr);
+    if (activeFilter === "Stationary") return motionStatusMap.stationarySet.has(empIdStr);
     return true;
   });
 
@@ -644,12 +923,22 @@ export default function AdminLiveMap() {
 
   const defaultCenter = [26.8467, 80.9462];
 
-  // Resolve active selected employee and location details
+  // Resolve active selected employee, location, motion status & stoppages
   const selectedIdStr = selected ? String(selected) : null;
   const selectedLoc = selectedIdStr ? (locations[selectedIdStr] || locations[selected]) : null;
   const selectedEmp = selectedIdStr ? employees.find(e => String(e._id) === selectedIdStr) : null;
   const selectedColor = selectedIdStr ? getEmpColor(selectedIdStr) : "#3b82f6";
-  const isSelectedStationary = selectedIdStr ? stationaryEmps.has(selectedIdStr) : false;
+
+  const selectedMotionStatus = selectedIdStr
+    ? (motionStatusMap.map[selectedIdStr] || getEmployeeMotionStatus(selectedLoc, selectedEmp))
+    : { status: 'OFFLINE', isMoving: false, isStopped: false, speedKmh: 0, stoppedStr: '', stoppedLongStr: '' };
+
+  const isSelectedStationary = Boolean(selectedMotionStatus.isStopped);
+
+  const selectedStoppages = React.useMemo(() => {
+    if (!selectedLoc?.path) return [];
+    return detectStoppages(selectedLoc.path, 3, 50);
+  }, [selectedLoc?.path]);
 
   return (
     <KisanConnectLayout>
@@ -753,7 +1042,7 @@ export default function AdminLiveMap() {
                     key={empId}
                     position={[loc.lat, loc.lng]}
                     zIndexOffset={isSelected ? 2000 : isStationary ? 1000 : 0}
-                    icon={getEmployeeMarkerIcon(loc.name || empData?.name, color, loc.isActive, loc.avatar || empData?.avatar, isStationary)}
+                    icon={getEmployeeMarkerIcon(loc.name || empData?.name, color, loc.isActive, loc.avatar || empData?.avatar, isStationary, motionStatusMap.map[empId])}
                     eventHandlers={{ click: () => handleSelectEmployee(empId) }}
                   >
                     <Popup className="custom-popup">
@@ -802,11 +1091,12 @@ export default function AdminLiveMap() {
                 );
               })}
 
-              {/* Selected polyline path & start/end pin (smooth Leaflet layer without DOM re-creation) */}
+              {/* Selected polyline path & start/end pin & stoppage markers */}
               {selectedLoc && (
                 <LivePolylineLayer
                   path={selectedLoc.path}
                   color={selectedColor}
+                  stoppages={selectedStoppages}
                 />
               )}
             </MapContainer>
@@ -871,16 +1161,43 @@ export default function AdminLiveMap() {
                 <div className="flex-1 overflow-y-auto p-3.5 space-y-3 custom-scrollbar">
 
                   {/* Status Banner */}
-                  <div className="flex items-center justify-between p-2.5 rounded-xl bg-[var(--bg-main)] border border-[var(--border-color)]">
+                  <div className={"flex items-center justify-between p-2.5 rounded-xl border transition-all " + (
+                    selectedMotionStatus.isStopped
+                      ? "bg-amber-500/10 border-amber-500/30"
+                      : selectedMotionStatus.isMoving
+                        ? "bg-emerald-500/10 border-emerald-500/30"
+                        : "bg-[var(--bg-main)] border-[var(--border-color)]"
+                  )}>
                     <div className="flex items-center gap-2">
-                      <div className={"w-2.5 h-2.5 rounded-full " + (selectedLoc?.isActive || selectedEmp?.isTracking ? "bg-emerald-500 animate-ping" : "bg-slate-400")} />
-                      <span className="text-xs font-black text-[var(--text-main)]">
-                        {selectedLoc?.isActive || selectedEmp?.isTracking ? "Live Tracking Active" : "Offline / Not Tracking"}
+                      <div className={"w-2.5 h-2.5 rounded-full " + (
+                        selectedMotionStatus.isStopped
+                          ? "bg-amber-500 ring-2 ring-amber-500/40"
+                          : selectedMotionStatus.isMoving
+                            ? "bg-emerald-500 animate-ping"
+                            : "bg-slate-400"
+                      )} />
+                      <span className={"text-xs font-black " + (
+                        selectedMotionStatus.isStopped
+                          ? "text-amber-600 dark:text-amber-400"
+                          : selectedMotionStatus.isMoving
+                            ? "text-emerald-600 dark:text-emerald-400"
+                            : "text-[var(--text-main)]"
+                      )}>
+                        {selectedMotionStatus.isStopped
+                          ? `Stationary • Stopped for ${selectedMotionStatus.stoppedLongStr}`
+                          : selectedMotionStatus.isMoving
+                            ? `In Transit • Moving (${selectedMotionStatus.speedKmh} km/h)`
+                            : "Offline / Not Tracking"}
                       </span>
                     </div>
-                    {isSelectedStationary && (
-                      <span className="text-[10px] font-black text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/20 flex items-center gap-1">
-                        <AlertTriangle className="w-3 h-3" /> Still 5m+
+                    {selectedMotionStatus.isStopped && (
+                      <span className="text-[10px] font-black text-amber-600 bg-amber-500/20 px-2 py-0.5 rounded-md border border-amber-500/30 flex items-center gap-1">
+                        ⏸️ Halt
+                      </span>
+                    )}
+                    {selectedMotionStatus.isMoving && (
+                      <span className="text-[10px] font-black text-emerald-600 bg-emerald-500/20 px-2 py-0.5 rounded-md border border-emerald-500/30 flex items-center gap-1">
+                        🟢 Moving
                       </span>
                     )}
                   </div>
@@ -913,15 +1230,25 @@ export default function AdminLiveMap() {
                       <p className="text-[9px] font-bold text-primary-600 mt-0.5">travel time</p>
                     </div>
 
-                    <div className="bg-violet-500/10 border border-violet-500/20 rounded-2xl p-3 text-center">
-                      <div className="flex items-center justify-center gap-1 text-violet-600 mb-1">
+                    <div className={"border rounded-2xl p-3 text-center transition-all " + (
+                      selectedMotionStatus.isStopped
+                        ? "bg-amber-500/10 border-amber-500/25"
+                        : "bg-violet-500/10 border-violet-500/20"
+                    )}>
+                      <div className={"flex items-center justify-center gap-1 mb-1 " + (
+                        selectedMotionStatus.isStopped ? "text-amber-600" : "text-violet-600"
+                      )}>
                         <Gauge className="w-3.5 h-3.5" />
                         <span className="text-[10px] font-black uppercase tracking-wider">Current Speed</span>
                       </div>
                       <p className="text-lg font-black text-[var(--text-main)] leading-none">
-                        {Math.round((selectedLoc?.speed || 0) * 3.6)} <span className="text-xs">km/h</span>
+                        {selectedMotionStatus.isStopped ? "0" : selectedMotionStatus.speedKmh} <span className="text-xs">km/h</span>
                       </p>
-                      <p className="text-[9px] font-bold text-violet-600 mt-0.5">GPS telemetry</p>
+                      <p className={"text-[9px] font-bold mt-0.5 " + (
+                        selectedMotionStatus.isStopped ? "text-amber-600" : "text-violet-600"
+                      )}>
+                        {selectedMotionStatus.isStopped ? `Stopped for ${selectedMotionStatus.stoppedStr}` : "In Transit"}
+                      </p>
                     </div>
 
                     <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-3 text-center">
@@ -973,6 +1300,50 @@ export default function AdminLiveMap() {
                       </div>
                     </div>
                   </div>
+
+                  {/* Route Stoppages & Halts Summary */}
+                  {selectedStoppages.length > 0 && (
+                    <div className="bg-[var(--bg-main)]/70 rounded-2xl p-3 border border-[var(--border-color)] space-y-2">
+                      <div className="flex items-center justify-between">
+                        <p className="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-wider flex items-center gap-1.5">
+                          <Clock className="w-3.5 h-3.5 text-amber-500" /> Route Halts (${selectedStoppages.length} stops)
+                        </p>
+                        <span className="text-[9px] font-bold text-amber-600 bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/20">
+                          Total: ${formatDurationMinutes(selectedStoppages.reduce((acc, s) => acc + s.durationMinutes, 0))}
+                        </span>
+                      </div>
+                      <div className="space-y-1.5 max-h-36 overflow-y-auto custom-scrollbar pr-1">
+                        {selectedStoppages.map((st, idx) => (
+                          <div
+                            key={idx}
+                            onClick={() => {
+                              setFlyCenter([st.lat, st.lng]);
+                              setFlyZoom(16);
+                            }}
+                            className="flex items-center justify-between p-2 rounded-xl bg-[var(--bg-card)] hover:bg-[var(--bg-card-hover)] border border-[var(--border-color)] transition-all cursor-pointer group shadow-2xs"
+                            title="Click to zoom to this halt"
+                          >
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="w-5 h-5 rounded-lg bg-amber-500/15 text-amber-600 font-black text-[10px] flex items-center justify-center flex-shrink-0">
+                                {st.stopNumber}
+                              </span>
+                              <div className="min-w-0">
+                                <p className="text-xs font-black text-[var(--text-main)] truncate">
+                                  {st.address ? st.address.split(",")[0] : `Halt Point #${st.stopNumber}`}
+                                </p>
+                                <p className="text-[9px] text-[var(--text-muted)] font-mono">
+                                  {new Date(st.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })} – {new Date(st.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}
+                                </p>
+                              </div>
+                            </div>
+                            <span className="text-[10px] font-black text-amber-600 bg-amber-500/10 px-2 py-0.5 rounded-md flex-shrink-0 group-hover:bg-amber-500 group-hover:text-white transition-colors">
+                              ⏸️ {formatDurationMinutes(st.durationMinutes)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Staff Contact Info */}
                   {(selectedEmp?.phone || selectedEmp?.email) && (
@@ -1122,7 +1493,8 @@ export default function AdminLiveMap() {
                   const loc = locations[empIdStr] || locations[emp._id];
                   const color = getEmpColor(empIdStr);
                   const isSelected = selectedIdStr === empIdStr;
-                  const isStationary = stationaryEmps.has(empIdStr);
+                  const motionInfo = motionStatusMap.map[empIdStr] || getEmployeeMotionStatus(loc, emp);
+                  const isStationary = Boolean(motionInfo.isStopped);
                   const isActiveTracking = loc?.isActive || emp.isTracking;
 
                   return (
@@ -1200,7 +1572,19 @@ export default function AdminLiveMap() {
                             ? (addresses[empIdStr]?.split(",")[0] || addresses[emp._id]?.split(",")[0] || "Locating...")
                             : (emp.department || "Field Services")}
                         </p>
-                        {isStationary && <span className="text-[8px] font-black text-amber-500">⚠ Stationary 5+ min</span>}
+                        {isActiveTracking && (
+                          <div className="mt-0.5">
+                            {motionInfo.isStopped ? (
+                              <span className="inline-flex items-center gap-1 text-[9px] font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-1.5 py-0.2 rounded border border-amber-500/20">
+                                <span>⏸️</span> Stopped {motionInfo.stoppedStr ? `(${motionInfo.stoppedStr})` : ""}
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-1.5 py-0.2 rounded border border-emerald-500/20">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span> Moving {motionInfo.speedKmh ? `(${motionInfo.speedKmh} km/h)` : ""}
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </div>
 
                       {loc?.startTime && (
