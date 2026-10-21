@@ -156,11 +156,13 @@ function getEmployeeMotionStatus(loc, emp) {
     };
   }
 
-  const speedKmh = Math.round((Number(loc?.speed) || 0) * 3.6);
+  const rawSpd = Number(loc?.speed) || 0;
+  const reportedSpeedKmh = Math.round(rawSpd > 0 ? (rawSpd <= 60 ? rawSpd * 3.6 : rawSpd) : 0);
   const path = Array.isArray(loc?.path) ? loc.path : [];
 
   let stoppedMinutes = 0;
   let isStopped = false;
+  let recentStepSpeedKmh = 0;
 
   if (path.length > 0) {
     const cleanPath = filterCleanCoords(path);
@@ -171,7 +173,7 @@ function getEmployeeMotionStatus(loc, emp) {
       let clusterStartTime = lastTs;
       for (let i = cleanPath.length - 2; i >= 0; i--) {
         const p = cleanPath[i];
-        if (haversineMeters(lastPt, p) <= 50) {
+        if (haversineMeters(lastPt, p) <= 35) {
           clusterStartTime = p.timestamp ? new Date(p.timestamp).getTime() : clusterStartTime;
         } else {
           break;
@@ -181,14 +183,31 @@ function getEmployeeMotionStatus(loc, emp) {
       const durationFromCluster = Math.max(0, Math.round((Date.now() - clusterStartTime) / 60000));
       const durationFromLastPt = Math.max(0, Math.round((Date.now() - lastTs) / 60000));
 
-      if (speedKmh < 3 || durationFromCluster >= 3) {
+      // Calculate step speed from last 2 points if recent fix arrived within 3 minutes
+      if (cleanPath.length >= 2 && durationFromLastPt < 3) {
+        const prevPt = cleanPath[cleanPath.length - 2];
+        const prevTs = prevPt.timestamp ? new Date(prevPt.timestamp).getTime() : lastTs;
+        const dtSec = Math.max(1, (lastTs - prevTs) / 1000);
+        const stepDistM = haversineMeters(prevPt, lastPt);
+        if (stepDistM >= 8 && dtSec <= 300) {
+          recentStepSpeedKmh = Math.min(140, Math.round((stepDistM / dtSec) * 3.6));
+        }
+      }
+
+      const effectiveSpeedKmh = Math.max(reportedSpeedKmh, recentStepSpeedKmh);
+      const isServerMoving = ['WALKING', 'RUNNING', 'BIKE', 'VEHICLE'].includes(loc?.motionState) && durationFromLastPt < 3;
+
+      // Only mark as Stopped if they have genuinely stayed in the same 35m spot (or sent no new GPS move) for >= 3 minutes
+      if (!isServerMoving && effectiveSpeedKmh < 3 && (durationFromCluster >= 3 || durationFromLastPt >= 3)) {
         stoppedMinutes = Math.max(durationFromCluster, durationFromLastPt, 3);
         isStopped = true;
       }
     }
   }
 
-  if (!isStopped && speedKmh < 3) {
+  const speedKmh = Math.max(reportedSpeedKmh, recentStepSpeedKmh);
+
+  if (!isStopped && speedKmh < 3 && (!path || path.length === 0)) {
     const lastUpdate = loc?.updatedAt ? new Date(loc.updatedAt).getTime() : Date.now();
     const diffMins = Math.round((Date.now() - lastUpdate) / 60000);
     if (diffMins >= 3) {
@@ -705,6 +724,8 @@ export default function AdminLiveMap() {
             ...last,
             lat: last.lat,
             lng: last.lng,
+            speed: Number(last.speed) || Number(l.speed) || 0,
+            motionState: l.motionState || last.motionState || 'STATIONARY',
             isActive: l.isActive !== false,
             name: l.employee?.name || l.name,
             employeeIdCode: l.employee?.employeeId || l.employeeIdCode,

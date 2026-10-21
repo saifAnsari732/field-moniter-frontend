@@ -27,7 +27,17 @@ import {
   Sparkles,
   ArrowRight,
   Filter,
-  FileSpreadsheet
+  FileSpreadsheet,
+  CalendarCheck,
+  UserCheck,
+  CheckCircle2,
+  AlertCircle,
+  XCircle,
+  Navigation,
+  Compass,
+  Building2,
+  Check,
+  HelpCircle,
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -44,6 +54,7 @@ export default function AdminReports() {
   const [reportData, setReportData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [reportType, setReportType] = useState('All');
+  const [viewLayout, setViewLayout] = useState('unified'); // 'unified' (Day-by-Day Timeline) or 'categorized' (Tables)
   const [expandedDates, setExpandedDates] = useState({});
   const printableReportRef = useRef(null);
 
@@ -117,7 +128,73 @@ export default function AdminReports() {
     }));
   };
 
-  // ─── Export to JPEG (Clean Target Ref without UI Buttons) ───────────────────
+  // ─── Build Day-by-Day Unified Timeline Map ────────────────────────────────
+  const buildDailyTimeline = () => {
+    if (!reportData) return [];
+
+    const dateMap = {};
+
+    // 1. Process Attendances
+    (reportData.attendances || []).forEach((a) => {
+      const dateKey = a.date || (a.createdAt ? new Date(a.createdAt).toISOString().slice(0, 10) : null);
+      if (!dateKey) return;
+      if (!dateMap[dateKey]) dateMap[dateKey] = { date: dateKey };
+      dateMap[dateKey].attendance = a;
+    });
+
+    // 2. Process Daily Distances
+    (reportData.dailyDistances || []).forEach((d) => {
+      const dateKey = d.date;
+      if (!dateKey) return;
+      if (!dateMap[dateKey]) dateMap[dateKey] = { date: dateKey };
+      dateMap[dateKey].distance = d;
+    });
+
+    // 3. Process Meetings
+    (reportData.meetings || []).forEach((m) => {
+      const dateKey = m.date ? new Date(m.date).toISOString().slice(0, 10) : null;
+      if (!dateKey) return;
+      if (!dateMap[dateKey]) dateMap[dateKey] = { date: dateKey };
+      if (!dateMap[dateKey].meetings) dateMap[dateKey].meetings = [];
+      dateMap[dateKey].meetings.push(m);
+    });
+
+    // 4. Process Expenses
+    (reportData.expenses || []).forEach((e) => {
+      const dateKey = e.date ? new Date(e.date).toISOString().slice(0, 10) : null;
+      if (!dateKey) return;
+      if (!dateMap[dateKey]) dateMap[dateKey] = { date: dateKey };
+      if (!dateMap[dateKey].expenses) dateMap[dateKey].expenses = [];
+      dateMap[dateKey].expenses.push(e);
+    });
+
+    // 5. Process Tasks
+    (reportData.tasks || []).forEach((t) => {
+      const dateKey = t.dueDate
+        ? new Date(t.dueDate).toISOString().slice(0, 10)
+        : t.createdAt
+        ? new Date(t.createdAt).toISOString().slice(0, 10)
+        : null;
+      if (!dateKey) return;
+      if (!dateMap[dateKey]) dateMap[dateKey] = { date: dateKey };
+      if (!dateMap[dateKey].tasks) dateMap[dateKey].tasks = [];
+      dateMap[dateKey].tasks.push(t);
+    });
+
+    // 6. Process Leads
+    (reportData.leads || []).forEach((l) => {
+      const dateKey = l.createdAt ? new Date(l.createdAt).toISOString().slice(0, 10) : null;
+      if (!dateKey) return;
+      if (!dateMap[dateKey]) dateMap[dateKey] = { date: dateKey };
+      if (!dateMap[dateKey].leads) dateMap[dateKey].leads = [];
+      dateMap[dateKey].leads.push(l);
+    });
+
+    // Sort descending by date
+    return Object.values(dateMap).sort((a, b) => new Date(b.date) - new Date(a.date));
+  };
+
+  // ─── Export to JPEG ────────────────────────────────────────────────────────
   const handleExportJPEG = async () => {
     if (!printableReportRef.current) return;
     try {
@@ -147,6 +224,7 @@ export default function AdminReports() {
       const emp = reportData.employee;
       const summary = reportData.summary;
       const daily = reportData.dailyDistances || [];
+      const attendances = reportData.attendances || [];
 
       let csv = `KISANCONNECT FIELD OPERATIONS REPORT\n`;
       csv += `Employee,${emp.name} (${emp.employeeId || 'N/A'})\n`;
@@ -159,6 +237,8 @@ export default function AdminReports() {
       csv += `DA Rate,Rs ${summary.daRate || 0} / day\n\n`;
 
       csv += `--- SUMMARY TOTALS ---\n`;
+      csv += `Days Present,${summary.daysPresent || 0}\n`;
+      csv += `Total Work Hours Logged,${summary.totalWorkHours || 0} hrs\n`;
       csv += `Total Distance (km),${summary.totalKm}\n`;
       csv += `Total Travel Pay (TA),Rs ${summary.travelPay}\n`;
       csv += `Total Meetings,${summary.totalMeetings}\n`;
@@ -167,6 +247,20 @@ export default function AdminReports() {
       csv += `Total Tasks,${summary.totalTasks}\n`;
       csv += `Total Leads,${summary.totalLeads}\n\n`;
 
+      // Attendance Table in CSV
+      if (attendances.length > 0) {
+        csv += `--- ATTENDANCE & WORKING HOURS LOG ---\n`;
+        csv += `Date,Day,Status,Punch In,Punch Out,Work Hours,Distance Traveled (km)\n`;
+        attendances.forEach((a) => {
+          const dayName = new Date(a.date).toLocaleDateString('en-US', { weekday: 'short' });
+          const checkInTime = a.checkIn ? new Date(a.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A';
+          const checkOutTime = a.checkOut ? new Date(a.checkOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : (a.status === 'present' ? 'In Progress' : 'N/A');
+          csv += `"${a.date}","${dayName}","${a.status?.toUpperCase() || 'PRESENT'}","${checkInTime}","${checkOutTime}","${a.totalWorkHours || 0} hrs","${a.totalDistanceTraveled || 0} km"\n`;
+        });
+        csv += `\n`;
+      }
+
+      // Daily Distance Table in CSV
       csv += `--- DAILY CONSOLIDATED DISTANCE & TRAVEL ALLOWANCE ---\n`;
       csv += `Date,Day,Sessions,Total Distance (km),TA Rate (Rs/km),Daily Travel Pay (Rs),Start Address,End Address\n`;
       daily.forEach((d) => {
@@ -211,7 +305,7 @@ export default function AdminReports() {
     }
   };
 
-  // ─── Export to PDF (Clean Formatting with autoTable) ─────────────────────────
+  // ─── Export to PDF (Clean Multi-Page AutoTable Format) ───────────────────────
   const handleExport = () => {
     if (!reportData) return;
 
@@ -220,52 +314,53 @@ export default function AdminReports() {
       const emp = reportData.employee;
       const summary = reportData.summary;
       const daily = reportData.dailyDistances || [];
+      const attendances = reportData.attendances || [];
 
       // Header Banner
-      doc.setFillColor(30, 41, 59);
+      doc.setFillColor(15, 23, 42); // slate-900
       doc.rect(0, 0, 595.28, 70, 'F');
 
       doc.setTextColor(255, 255, 255);
-      doc.setFontSize(16);
+      doc.setFontSize(15);
       doc.setFont('helvetica', 'bold');
-      doc.text('KISANCONNECT FIELD OPERATIONS REPORT', 40, 32);
+      doc.text('KISANCONNECT FIELD TELEMETRY & OPERATIONS', 40, 30);
 
       doc.setFontSize(9);
       doc.setFont('helvetica', 'normal');
-      doc.text(`AUDIT PERIOD: ${startDate} to ${endDate}   |   GENERATED: ${new Date().toLocaleDateString()}`, 40, 50);
+      doc.text(`CONSOLIDATED ACTIVITY & AUDIT REPORT   |   PERIOD: ${startDate} to ${endDate}`, 40, 48);
 
       // Employee Information Block
       const empTableData = [
         ['Employee Name', emp.name, 'Department', emp.department || 'Field Services'],
         ['Employee ID', emp.employeeId || '-', 'Designation', emp.designation || 'Field Executive'],
         ['Contact Phone', emp.phone || '-', 'Allocated Area', emp.allocatedArea || 'General Zone'],
-        ['Monthly Salary', `Rs. ${emp.salary || 12000}`, 'TA Travel Rate', `Rs. ${summary.taRate || 2.5} / km`],
+        ['Base Salary', `Rs. ${emp.salary || 12000} / mo`, 'TA Rate', `Rs. ${summary.taRate || 2.5} / km`],
       ];
 
       // @ts-ignore
       doc.autoTable({
         startY: 85,
-        head: [['Profile Field', 'Information', 'Operations Field', 'Information']],
+        head: [['Profile Attribute', 'Detail', 'Operations Attribute', 'Detail']],
         body: empTableData,
         theme: 'grid',
         styles: { fontSize: 8, cellPadding: 4, font: 'helvetica' },
-        headStyles: { fillColor: [59, 130, 246], textColor: 255, fontStyle: 'bold' },
+        headStyles: { fillColor: [37, 99, 235], textColor: 255, fontStyle: 'bold' },
         margin: { left: 40, right: 40 },
       });
 
-      let y = doc.previousAutoTable.finalY + 15;
+      let y = doc.previousAutoTable.finalY + 12;
 
       // Executive Summary KPI Table
       const summaryTableData = [
-        ['Total Traveled Distance', `${summary.totalKm.toFixed(2)} km`, 'Client Meetings / Visits', `${summary.totalMeetings} (${summary.completedMeetings || 0} Done)`],
-        ['Total Travel Pay (TA)', `Rs. ${summary.travelPay}`, 'Expense Claims', `Rs. ${summary.totalExpenses} (Rs. ${summary.approvedExpenses || 0} Approved)`],
+        ['Attendance Days Present', `${summary.daysPresent || 0} Days (${summary.totalWorkHours || 0} hrs)`, 'Total Traveled Distance', `${summary.totalKm.toFixed(2)} km (Rs. ${summary.travelPay} TA)`],
+        ['Client Meetings / Visits', `${summary.totalMeetings} (${summary.completedMeetings || 0} Done)`, 'Expense Claims', `Rs. ${summary.totalExpenses} (Rs. ${summary.approvedExpenses || 0} Approved)`],
         ['Assigned Tasks', `${summary.totalTasks} Tasks`, 'New Leads Captured', `${summary.totalLeads} Leads`],
       ];
 
       // @ts-ignore
       doc.autoTable({
         startY: y,
-        head: [['Metric', 'Summary Result', 'Activity Metric', 'Summary Result']],
+        head: [['Key Operations Metric', 'Result', 'Activity Metric', 'Result']],
         body: summaryTableData,
         theme: 'striped',
         styles: { fontSize: 8, cellPadding: 4, font: 'helvetica' },
@@ -273,14 +368,53 @@ export default function AdminReports() {
         margin: { left: 40, right: 40 },
       });
 
-      y = doc.previousAutoTable.finalY + 20;
+      y = doc.previousAutoTable.finalY + 18;
 
-      // 1. Consolidated Daily Distance Table
-      if (daily.length > 0 && (reportType === 'All' || reportType === 'Distance')) {
-        doc.setFontSize(11);
+      // 1. Attendance & Punch Log Table
+      if (attendances.length > 0 && (reportType === 'All' || reportType === 'Attendance')) {
+        doc.setFontSize(10);
         doc.setFont('helvetica', 'bold');
-        doc.setTextColor(30, 41, 59);
-        doc.text('1. Consolidated Daily Distance & Travel Allowance (TA)', 40, y);
+        doc.setTextColor(15, 23, 42);
+        doc.text('1. Daily Attendance & Working Hours Log', 40, y);
+
+        const attendanceRows = attendances.map((a) => {
+          const checkInTime = a.checkIn ? new Date(a.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A';
+          const checkOutTime = a.checkOut ? new Date(a.checkOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : (a.status === 'present' ? 'In Progress' : 'N/A');
+          return [
+            a.date,
+            new Date(a.date).toLocaleDateString('en-US', { weekday: 'short' }),
+            a.status?.toUpperCase() || 'PRESENT',
+            checkInTime,
+            checkOutTime,
+            `${a.totalWorkHours || 0} hrs`,
+            `${(a.totalDistanceTraveled || 0).toFixed(1)} km`,
+          ];
+        });
+
+        // @ts-ignore
+        doc.autoTable({
+          startY: y + 6,
+          head: [['Date', 'Day', 'Status', 'Punch In', 'Punch Out', 'Work Hours', 'Traveled Km']],
+          body: attendanceRows,
+          theme: 'grid',
+          styles: { fontSize: 8, cellPadding: 4, font: 'helvetica' },
+          headStyles: { fillColor: [5, 150, 105], textColor: 255, fontStyle: 'bold' },
+          margin: { left: 40, right: 40 },
+        });
+
+        y = doc.previousAutoTable.finalY + 18;
+      }
+
+      // 2. Consolidated Daily Distance Table
+      if (daily.length > 0 && (reportType === 'All' || reportType === 'Distance')) {
+        if (y > 680) {
+          doc.addPage();
+          y = 40;
+        }
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(15, 23, 42);
+        doc.text('2. Consolidated Daily Distance & Travel Allowance (TA)', 40, y);
 
         const distanceRows = daily.map((d) => [
           d.date,
@@ -294,7 +428,7 @@ export default function AdminReports() {
 
         // @ts-ignore
         doc.autoTable({
-          startY: y + 8,
+          startY: y + 6,
           head: [['Date', 'Day', 'Sessions', 'Total Distance', 'Rate', 'Travel Pay', 'Start Location']],
           body: distanceRows,
           theme: 'grid',
@@ -303,19 +437,19 @@ export default function AdminReports() {
           margin: { left: 40, right: 40 },
         });
 
-        y = doc.previousAutoTable.finalY + 20;
+        y = doc.previousAutoTable.finalY + 18;
       }
 
-      // 2. Client Meetings Table
+      // 3. Client Meetings Table
       if (reportData.meetings?.length > 0 && (reportType === 'All' || reportType === 'Meetings')) {
-        if (y > 700) {
+        if (y > 680) {
           doc.addPage();
           y = 40;
         }
-        doc.setFontSize(11);
+        doc.setFontSize(10);
         doc.setFont('helvetica', 'bold');
-        doc.setTextColor(30, 41, 59);
-        doc.text('2. Client Meetings & Visits Log', 40, y);
+        doc.setTextColor(15, 23, 42);
+        doc.text('3. Client Meetings & Visits Log', 40, y);
 
         const meetingRows = reportData.meetings.map((m) => [
           new Date(m.date).toLocaleDateString(),
@@ -329,7 +463,7 @@ export default function AdminReports() {
 
         // @ts-ignore
         doc.autoTable({
-          startY: y + 8,
+          startY: y + 6,
           head: [['Date', 'Client', 'Store/Company', 'Phone', 'Deal Value', 'Status', 'Notes']],
           body: meetingRows,
           theme: 'grid',
@@ -338,19 +472,19 @@ export default function AdminReports() {
           margin: { left: 40, right: 40 },
         });
 
-        y = doc.previousAutoTable.finalY + 20;
+        y = doc.previousAutoTable.finalY + 18;
       }
 
-      // 3. Expense Claims Table
+      // 4. Expense Claims Table
       if (reportData.expenses?.length > 0 && (reportType === 'All' || reportType === 'Expenses')) {
-        if (y > 700) {
+        if (y > 680) {
           doc.addPage();
           y = 40;
         }
-        doc.setFontSize(11);
+        doc.setFontSize(10);
         doc.setFont('helvetica', 'bold');
-        doc.setTextColor(30, 41, 59);
-        doc.text('3. Expense Claims & Reimbursements', 40, y);
+        doc.setTextColor(15, 23, 42);
+        doc.text('4. Expense Claims & Reimbursements', 40, y);
 
         const expenseRows = reportData.expenses.map((e) => [
           new Date(e.date).toLocaleDateString(),
@@ -362,7 +496,7 @@ export default function AdminReports() {
 
         // @ts-ignore
         doc.autoTable({
-          startY: y + 8,
+          startY: y + 6,
           head: [['Date', 'Category', 'Amount', 'Status', 'Description']],
           body: expenseRows,
           theme: 'grid',
@@ -371,8 +505,18 @@ export default function AdminReports() {
           margin: { left: 40, right: 40 },
         });
 
-        y = doc.previousAutoTable.finalY + 20;
+        y = doc.previousAutoTable.finalY + 18;
       }
+
+      // 5. Sign-off Footer block
+      if (y > 680) {
+        doc.addPage();
+        y = 50;
+      }
+      doc.setFontSize(8);
+      doc.setTextColor(100, 116, 139);
+      doc.text(`Official Document Generated by KisanConnect Telemetry on ${new Date().toLocaleString()}`, 40, y + 25);
+      doc.text('Authorized Employee Signature: _______________________      Manager Approval: _______________________', 40, y + 50);
 
       const filename = `Report_${emp.name.replace(/\s+/g, '_')}_${startDate}_to_${endDate}.pdf`;
       doc.save(filename);
@@ -383,11 +527,43 @@ export default function AdminReports() {
     }
   };
 
+  const dailyTimeline = reportData ? buildDailyTimeline() : [];
+
   return (
     <KisanConnectLayout>
+      {/* ── Print Stylesheet Optimization ── */}
+      <style>
+        {`
+          @media print {
+            body {
+              background: #ffffff !important;
+              color: #0f172a !important;
+              font-size: 11px !important;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
+            .no-print, header, aside, .print\\:hidden {
+              display: none !important;
+            }
+            .print-avoid-break {
+              page-break-inside: avoid !important;
+              break-inside: avoid !important;
+            }
+            .print-page-break {
+              page-break-before: always !important;
+              break-before: page !important;
+            }
+            .print-border {
+              border: 1px solid #cbd5e1 !important;
+            }
+          }
+        `}
+      </style>
+
       <div className="space-y-6 max-w-[1600px] mx-auto pb-12 print:p-0 print:m-0 print:max-w-none">
+        
         {/* ── Top Header & Export Toolbar (Hidden on Print) ── */}
-        <div className="no-print print:hidden flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
+        <div className="no-print print:hidden flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-slate-200/90 shadow-sm">
           <div>
             <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-blue-600 bg-blue-50 px-3 py-1 rounded-full w-fit mb-2">
               <Sparkles className="w-3.5 h-3.5 text-blue-600" />
@@ -395,10 +571,10 @@ export default function AdminReports() {
             </div>
             <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight flex items-center gap-3">
               <FileText className="w-8 h-8 text-blue-600" />
-              Unified Activity & Distance Report
+              Unified Activity, Attendance & Distance Report
             </h1>
             <p className="text-xs sm:text-sm text-slate-500 font-medium mt-1">
-              Consolidated daily distance audit, travel allowance calculation, client visits, and expense summaries.
+              Consolidated daily distance audit, geofenced attendance hours, travel allowance (TA), client visits, and expense settlements.
             </p>
           </div>
 
@@ -442,8 +618,8 @@ export default function AdminReports() {
         </div>
 
         {/* ── Filter & Generation Control Panel (Hidden on Print) ── */}
-        <div className="no-print print:hidden bg-white p-6 sm:p-7 rounded-3xl border border-slate-200 shadow-sm space-y-5">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div className="no-print print:hidden bg-white p-6 sm:p-7 rounded-3xl border border-slate-200/90 shadow-sm space-y-5">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-3 flex-wrap gap-2">
             <h3 className="text-xs font-black uppercase tracking-wider text-slate-400 flex items-center gap-2">
               <Filter className="w-4 h-4 text-blue-600" />
               Report Configuration & Date Range Filters
@@ -478,11 +654,12 @@ export default function AdminReports() {
                 Report View Focus
               </label>
               <select
-                className="w-full text-xs font-bold text-slate-800 bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-3 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
+                className="w-full text-xs font-bold text-slate-800 bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-3 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition cursor-pointer"
                 value={reportType}
                 onChange={(e) => setReportType(e.target.value)}
               >
                 <option value="All">Unified (All Operations Data)</option>
+                <option value="Attendance">Attendance & Punch Hours</option>
                 <option value="Distance">Distance Details & TA Pay</option>
                 <option value="Meetings">Meetings & Client Visits Log</option>
                 <option value="Expenses">Expense Claims & Settlements</option>
@@ -498,7 +675,7 @@ export default function AdminReports() {
                 Target Field Executive
               </label>
               <select
-                className="w-full text-xs font-bold text-slate-800 bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-3 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
+                className="w-full text-xs font-bold text-slate-800 bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-3 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition cursor-pointer"
                 value={selectedEmp}
                 onChange={(e) => setSelectedEmp(e.target.value)}
               >
@@ -570,7 +747,7 @@ export default function AdminReports() {
             <div className="max-w-md mx-auto space-y-1">
               <h3 className="text-lg font-black text-slate-900">Build a Field Staff Report</h3>
               <p className="text-xs text-slate-500 font-medium">
-                Choose an employee and a date range from the panel above, then click <strong className="text-blue-600">Generate Report</strong> to inspect consolidated distance, meetings, expenses, and TA/DA totals.
+                Choose an employee and a date range from the panel above, then click <strong className="text-blue-600">Generate Report</strong> to inspect consolidated distance, attendance hours, meetings, expenses, and TA/DA totals.
               </p>
             </div>
 
@@ -596,27 +773,27 @@ export default function AdminReports() {
             ref={printableReportRef}
             className="space-y-6 bg-white p-4 sm:p-6 rounded-3xl border border-slate-200/80 shadow-sm print:border-none print:shadow-none print:p-0 print:m-0"
           >
-            {/* Print-Only Document Banner (Appears only on Paper / Print Preview) */}
+            {/* ── Print-Only Official Document Header ── */}
             <div className="hidden print:block mb-6 pb-4 border-b-2 border-slate-900">
               <div className="flex items-center justify-between">
                 <div>
                   <h1 className="text-xl font-black text-slate-900 uppercase tracking-tight">
-                    KISANCONNECT FIELD OPERATIONS
+                    KISANCONNECT FIELD TELEMETRY & OPERATIONS
                   </h1>
                   <p className="text-xs font-bold text-slate-600">
-                    Consolidated Activity & Distance Audit Report
+                    Official Executive Activity, Attendance & Distance Audit Report
                   </p>
                 </div>
                 <div className="text-right text-xs font-semibold text-slate-700">
-                  <div>Period: <strong className="text-slate-900">{startDate} to {endDate}</strong></div>
-                  <div>Printed On: <strong>{new Date().toLocaleDateString('en-IN')}</strong></div>
+                  <div>Audit Period: <strong className="text-slate-900">{startDate} to {endDate}</strong></div>
+                  <div>Printed On: <strong>{new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</strong></div>
                 </div>
               </div>
             </div>
 
-            {/* Employee Profile & Remuneration Card */}
+            {/* ── Employee Profile & Remuneration Card ── */}
             <div className="print-avoid-break bg-slate-50/70 print:bg-white rounded-3xl p-6 border border-slate-200/90 print:border-slate-300 shadow-xs space-y-4">
-              <div className="flex items-center justify-between border-b border-slate-200/80 pb-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200/80 pb-4">
                 <div className="flex items-center gap-3.5">
                   <Avatar
                     src={reportData.employee.avatar}
@@ -624,10 +801,13 @@ export default function AdminReports() {
                     size="lg"
                   />
                   <div>
-                    <h2 className="text-xl font-black text-slate-900 tracking-tight">
-                      {reportData.employee.name}
+                    <h2 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+                      <span>{reportData.employee.name}</span>
+                      <span className="no-print print:hidden text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+                        Active Field Staff
+                      </span>
                     </h2>
-                    <p className="text-xs text-slate-500 font-semibold flex items-center gap-2 mt-0.5">
+                    <p className="text-xs text-slate-500 font-semibold flex items-center gap-2 mt-0.5 flex-wrap">
                       <span className="font-mono text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md font-bold print:border print:border-blue-200">
                         {reportData.employee.employeeId || 'EMP-N/A'}
                       </span>
@@ -639,14 +819,14 @@ export default function AdminReports() {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-slate-600 bg-white print:bg-slate-100 px-3 py-1 rounded-full border border-slate-200">
-                    Audit Period: <strong>{startDate} to {endDate}</strong>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs font-bold text-slate-600 bg-white print:bg-slate-100 px-3.5 py-1.5 rounded-full border border-slate-200 shadow-2xs">
+                    Period: <strong>{startDate} to {endDate}</strong>
                   </span>
                 </div>
               </div>
 
-              {/* Remuneration Grid */}
+              {/* Remuneration & Details Grid */}
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5 pt-1">
                 <div className="bg-white print:bg-slate-50 p-3.5 rounded-2xl border border-slate-200/80">
                   <span className="text-[10px] font-black uppercase text-slate-400 block mb-1">
@@ -709,108 +889,571 @@ export default function AdminReports() {
               </div>
             </div>
 
-            {/* 5 Core KPI Metric Cards */}
-            <div className="print-avoid-break grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-              {/* Distance */}
-              <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs space-y-1">
+            {/* ── 6 Core KPI Metric Cards (Includes Attendance) ── */}
+            <div className="print-avoid-break grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5">
+              
+              {/* 1. Attendance & Working Hours */}
+              <div className="bg-white p-4.5 rounded-3xl border border-emerald-200/80 shadow-xs space-y-1 bg-gradient-to-b from-emerald-50/30 to-white">
                 <div className="flex items-center justify-between">
-                  <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
-                    <MapPin className="w-5 h-5" />
+                  <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">
+                    <CalendarCheck className="w-4 h-4" />
                   </div>
-                  <span className="text-[11px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md">
+                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded-md">
+                    {reportData.summary.totalWorkHours || 0} hrs
+                  </span>
+                </div>
+                <h4 className="text-2xl font-black text-slate-900 pt-1">
+                  {reportData.summary.daysPresent || 0}{' '}
+                  <span className="text-xs text-slate-400 font-bold">Days</span>
+                </h4>
+                <p className="text-xs font-bold text-slate-600">Attendance Present</p>
+                <span className="text-[10px] text-slate-400 block font-medium truncate">
+                  {reportData.summary.halfDays ? `${reportData.summary.halfDays} Half-day • ` : ''}
+                  {reportData.attendances?.length || 0} punch records
+                </span>
+              </div>
+
+              {/* 2. Distance */}
+              <div className="bg-white p-4.5 rounded-3xl border border-blue-200/80 shadow-xs space-y-1 bg-gradient-to-b from-blue-50/30 to-white">
+                <div className="flex items-center justify-between">
+                  <div className="w-8 h-8 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center font-bold">
+                    <MapPin className="w-4 h-4" />
+                  </div>
+                  <span className="text-[10px] font-bold text-blue-700 bg-blue-100/80 px-2 py-0.5 rounded-md">
                     ₹{reportData.summary.travelPay} TA
                   </span>
                 </div>
                 <h4 className="text-2xl font-black text-slate-900 pt-1">
-                  {reportData.summary.totalKm.toFixed(2)}{' '}
+                  {reportData.summary.totalKm.toFixed(1)}{' '}
                   <span className="text-xs text-slate-400 font-bold">km</span>
                 </h4>
-                <p className="text-xs font-bold text-slate-500">Total Distance</p>
+                <p className="text-xs font-bold text-slate-600">Total Distance</p>
                 <span className="text-[10px] text-slate-400 block font-medium">
                   {reportData.dailyDistances?.length || 0} active days
                 </span>
               </div>
 
-              {/* Meetings */}
-              <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs space-y-1">
+              {/* 3. Meetings */}
+              <div className="bg-white p-4.5 rounded-3xl border border-purple-200/80 shadow-xs space-y-1 bg-gradient-to-b from-purple-50/30 to-white">
                 <div className="flex items-center justify-between">
-                  <div className="w-9 h-9 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center font-bold">
-                    <Briefcase className="w-5 h-5" />
+                  <div className="w-8 h-8 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center font-bold">
+                    <Briefcase className="w-4 h-4" />
                   </div>
-                  <span className="text-[11px] font-bold text-purple-600 bg-purple-50 px-2 py-0.5 rounded-md">
+                  <span className="text-[10px] font-bold text-purple-700 bg-purple-100/80 px-2 py-0.5 rounded-md">
                     {reportData.summary.completedMeetings || 0} Done
                   </span>
                 </div>
                 <h4 className="text-2xl font-black text-slate-900 pt-1">
                   {reportData.summary.totalMeetings}
                 </h4>
-                <p className="text-xs font-bold text-slate-500">Client Meetings</p>
+                <p className="text-xs font-bold text-slate-600">Client Visits</p>
                 <span className="text-[10px] text-slate-400 block font-medium">
-                  Store & client visits
+                  Client & store visits
                 </span>
               </div>
 
-              {/* Expenses */}
-              <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs space-y-1">
+              {/* 4. Expenses */}
+              <div className="bg-white p-4.5 rounded-3xl border border-amber-200/80 shadow-xs space-y-1 bg-gradient-to-b from-amber-50/30 to-white">
                 <div className="flex items-center justify-between">
-                  <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
-                    <Receipt className="w-5 h-5" />
+                  <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center font-bold">
+                    <Receipt className="w-4 h-4" />
                   </div>
-                  <span className="text-[11px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md">
-                    ₹{reportData.summary.approvedExpenses || 0} Approved
+                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded-md">
+                    ₹{reportData.summary.approvedExpenses || 0} Appr.
                   </span>
                 </div>
                 <h4 className="text-2xl font-black text-slate-900 pt-1">
                   ₹{reportData.summary.totalExpenses}
                 </h4>
-                <p className="text-xs font-bold text-slate-500">Expenses Claimed</p>
+                <p className="text-xs font-bold text-slate-600">Expenses Claimed</p>
                 <span className="text-[10px] text-slate-400 block font-medium">
                   Fuel, meals, stays
                 </span>
               </div>
 
-              {/* Tasks */}
-              <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs space-y-1">
+              {/* 5. Tasks */}
+              <div className="bg-white p-4.5 rounded-3xl border border-indigo-200/80 shadow-xs space-y-1 bg-gradient-to-b from-indigo-50/30 to-white">
                 <div className="flex items-center justify-between">
-                  <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold">
-                    <CheckCircle className="w-5 h-5" />
+                  <div className="w-8 h-8 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold">
+                    <CheckCircle className="w-4 h-4" />
                   </div>
-                  <span className="text-[11px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-md">
+                  <span className="text-[10px] font-bold text-indigo-700 bg-indigo-100/80 px-2 py-0.5 rounded-md">
                     {reportData.summary.completedTasks || 0} Closed
                   </span>
                 </div>
                 <h4 className="text-2xl font-black text-slate-900 pt-1">
                   {reportData.summary.totalTasks}
                 </h4>
-                <p className="text-xs font-bold text-slate-500">Assigned Tasks</p>
+                <p className="text-xs font-bold text-slate-600">Assigned Tasks</p>
                 <span className="text-[10px] text-slate-400 block font-medium">
                   Field assignments
                 </span>
               </div>
 
-              {/* Leads */}
-              <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs space-y-1">
+              {/* 6. Leads */}
+              <div className="bg-white p-4.5 rounded-3xl border border-rose-200/80 shadow-xs space-y-1 bg-gradient-to-b from-rose-50/30 to-white">
                 <div className="flex items-center justify-between">
-                  <div className="w-9 h-9 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center font-bold">
-                    <Target className="w-5 h-5" />
+                  <div className="w-8 h-8 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center font-bold">
+                    <Target className="w-4 h-4" />
                   </div>
-                  <span className="text-[11px] font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-md">
+                  <span className="text-[10px] font-bold text-rose-700 bg-rose-100/80 px-2 py-0.5 rounded-md">
                     Pipeline
                   </span>
                 </div>
                 <h4 className="text-2xl font-black text-slate-900 pt-1">
                   {reportData.summary.totalLeads}
                 </h4>
-                <p className="text-xs font-bold text-slate-500">Leads Captured</p>
+                <p className="text-xs font-bold text-slate-600">Leads Captured</p>
                 <span className="text-[10px] text-slate-400 block font-medium">
                   New client prospects
                 </span>
               </div>
             </div>
 
-            {/* ── 1. CONSOLIDATED DAILY DISTANCE SECTION (COMBINED BY DATE) ── */}
-            {(reportType === 'All' || reportType === 'Distance') && (
-              <div className="print-avoid-break bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden space-y-0">
+            {/* ── View Switcher Toolbar (Screen Only) ── */}
+            <div className="no-print print:hidden flex items-center justify-between border-y border-slate-100 py-3">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-slate-400 mr-1">Layout Style:</span>
+                <button
+                  type="button"
+                  onClick={() => setViewLayout('unified')}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer ${
+                    viewLayout === 'unified'
+                      ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/30'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  <Calendar className="w-3.5 h-3.5" />
+                  <span>Day-by-Day Unified Timeline</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewLayout('categorized')}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer ${
+                    viewLayout === 'categorized'
+                      ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/30'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  <Layers className="w-3.5 h-3.5" />
+                  <span>Categorized Tables</span>
+                </button>
+              </div>
+
+              <div className="text-xs text-slate-400 font-semibold">
+                Showing <strong>{dailyTimeline.length} active dates</strong> in range
+              </div>
+            </div>
+
+            {/* ── UNIQUE LAYOUT: DAY-BY-DAY UNIFIED ACTIVITY TIMELINE ── */}
+            {viewLayout === 'unified' && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
+                    <Calendar className="w-5 h-5 text-blue-600" />
+                    <span>Daily Operations Chronological Timeline ({dailyTimeline.length} Days)</span>
+                  </h3>
+                  <span className="text-xs font-bold text-blue-700 bg-blue-50 px-3 py-1 rounded-full border border-blue-200/80">
+                    Unified Date-Range View
+                  </span>
+                </div>
+
+                {dailyTimeline.length > 0 ? (
+                  <div className="space-y-3.5">
+                    {dailyTimeline.map((item) => {
+                      const dateObj = new Date(item.date);
+                      const formattedDate = dateObj.toLocaleDateString('en-US', {
+                        weekday: 'short',
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric',
+                      });
+                      const isExpanded = expandedDates[item.date];
+
+                      const att = item.attendance;
+                      const dist = item.distance;
+                      const meets = item.meetings || [];
+                      const exps = item.expenses || [];
+                      const tsks = item.tasks || [];
+                      const lds = item.leads || [];
+
+                      const checkInStr = att?.checkIn
+                        ? new Date(att.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                        : null;
+                      const checkOutStr = att?.checkOut
+                        ? new Date(att.checkOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                        : att?.status === 'present'
+                        ? 'Shift in progress'
+                        : null;
+
+                      return (
+                        <div
+                          key={item.date}
+                          className="bg-white rounded-2xl border border-slate-200/90 shadow-xs hover:border-blue-300 transition-all overflow-hidden"
+                        >
+                          {/* Day Header Row */}
+                          <div className="p-4 sm:p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-3.5 bg-gradient-to-r from-slate-50/80 via-white to-slate-50/50">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 rounded-2xl bg-blue-50 border border-blue-200/80 text-blue-700 flex flex-col items-center justify-center font-black leading-none shrink-0">
+                                <span className="text-[10px] uppercase font-bold text-blue-500">
+                                  {dateObj.toLocaleDateString('en-US', { weekday: 'short' })}
+                                </span>
+                                <span className="text-sm font-black text-slate-900 mt-0.5">
+                                  {dateObj.getDate()}
+                                </span>
+                              </div>
+
+                              <div>
+                                <h4 className="text-sm font-black text-slate-900">{formattedDate}</h4>
+                                <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                                  {/* Attendance Badge */}
+                                  {att ? (
+                                    <span
+                                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                                        att.status === 'present'
+                                          ? 'bg-emerald-100 text-emerald-800'
+                                          : att.status === 'half-day'
+                                          ? 'bg-amber-100 text-amber-800'
+                                          : att.status === 'leave'
+                                          ? 'bg-purple-100 text-purple-800'
+                                          : 'bg-rose-100 text-rose-800'
+                                      }`}
+                                    >
+                                      <CalendarCheck className="w-3 h-3" />
+                                      <span>
+                                        {att.status || 'Present'} {checkInStr ? `(${checkInStr} - ${checkOutStr || 'Active'})` : ''}
+                                      </span>
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-500">
+                                      No Punch Recorded
+                                    </span>
+                                  )}
+
+                                  {att?.totalWorkHours > 0 && (
+                                    <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md">
+                                      ⏱️ {att.totalWorkHours} hrs
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Daily Operations Quick Metrics Pills */}
+                            <div className="flex items-center gap-2 flex-wrap text-xs font-bold">
+                              {/* Distance */}
+                              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50/80 border border-blue-200/70 text-blue-800">
+                                <MapPin className="w-3.5 h-3.5 text-blue-600" />
+                                <span>{dist?.totalDistance ? `${dist.totalDistance.toFixed(1)} km` : '0 km'}</span>
+                                {dist?.travelPay > 0 && (
+                                  <span className="text-[10px] text-blue-600 font-semibold">(₹{dist.travelPay} TA)</span>
+                                )}
+                              </div>
+
+                              {/* Meetings */}
+                              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-50/80 border border-purple-200/70 text-purple-800">
+                                <Briefcase className="w-3.5 h-3.5 text-purple-600" />
+                                <span>{meets.length} Visits</span>
+                              </div>
+
+                              {/* Expenses */}
+                              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50/80 border border-amber-200/70 text-amber-800">
+                                <Receipt className="w-3.5 h-3.5 text-amber-600" />
+                                <span>₹{exps.reduce((acc, e) => acc + (Number(e.amount) || 0), 0)} Claims</span>
+                              </div>
+
+                              {/* Tasks & Leads */}
+                              {(tsks.length > 0 || lds.length > 0) && (
+                                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 text-slate-700">
+                                  <span>{tsks.length} Tasks</span>
+                                  <span>•</span>
+                                  <span>{lds.length} Leads</span>
+                                </div>
+                              )}
+
+                              {/* Expand / Collapse Button */}
+                              <button
+                                type="button"
+                                onClick={() => toggleDateExpansion(item.date)}
+                                className="no-print print:hidden ml-auto inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition cursor-pointer"
+                              >
+                                <span>{isExpanded ? 'Hide' : 'Details'}</span>
+                                {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Expanded Day Details Breakdown */}
+                          {isExpanded && (
+                            <div className="p-4 sm:p-5 border-t border-slate-100 bg-slate-50/40 space-y-4">
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                
+                                {/* Attendance & Check In Card */}
+                                <div className="bg-white p-3.5 rounded-2xl border border-slate-200/90 shadow-2xs space-y-2">
+                                  <h5 className="text-xs font-black uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                                    <CalendarCheck className="w-3.5 h-3.5 text-emerald-600" />
+                                    <span>Attendance & Punch Log</span>
+                                  </h5>
+                                  {att ? (
+                                    <div className="text-xs space-y-1.5 text-slate-700 font-semibold">
+                                      <div className="flex justify-between">
+                                        <span className="text-slate-400">Punch In:</span>
+                                        <strong className="text-slate-900">{checkInStr || 'N/A'}</strong>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span className="text-slate-400">Punch Out:</span>
+                                        <strong className="text-slate-900">{checkOutStr || 'N/A'}</strong>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span className="text-slate-400">Total Hours:</span>
+                                        <strong className="text-emerald-700">{att.totalWorkHours ? `${att.totalWorkHours} hrs` : '—'}</strong>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span className="text-slate-400">Status:</span>
+                                        <span className="uppercase text-[11px] font-black text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded">
+                                          {att.status || 'Present'}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <p className="text-xs text-slate-400 italic">No attendance punch recorded for this date.</p>
+                                  )}
+                                </div>
+
+                                {/* Distance & Sessions Card */}
+                                <div className="bg-white p-3.5 rounded-2xl border border-slate-200/90 shadow-2xs space-y-2">
+                                  <h5 className="text-xs font-black uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                                    <MapPin className="w-3.5 h-3.5 text-blue-600" />
+                                    <span>Distance Traveled ({dist?.sessionsCount || 0} Sessions)</span>
+                                  </h5>
+                                  {dist ? (
+                                    <div className="text-xs space-y-1.5 text-slate-700 font-semibold">
+                                      <div className="flex justify-between">
+                                        <span className="text-slate-400">Total Distance:</span>
+                                        <strong className="text-blue-600">{dist.totalDistance.toFixed(2)} km</strong>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span className="text-slate-400">Travel Pay (TA):</span>
+                                        <strong className="text-emerald-700">₹{dist.travelPay.toFixed(2)}</strong>
+                                      </div>
+                                      <div className="text-[11px] text-slate-500 truncate pt-1">
+                                        <span className="text-slate-400">Start:</span> {dist.startAddress || '—'}
+                                      </div>
+                                      <div className="text-[11px] text-slate-500 truncate">
+                                        <span className="text-slate-400">End:</span> {dist.endAddress || '—'}
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <p className="text-xs text-slate-400 italic">No distance tracking data recorded for this date.</p>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Meetings Log on this Day */}
+                              {meets.length > 0 && (
+                                <div className="bg-white p-3.5 rounded-2xl border border-slate-200/90 space-y-2">
+                                  <h5 className="text-xs font-black uppercase tracking-wider text-purple-700 flex items-center gap-1.5">
+                                    <Briefcase className="w-3.5 h-3.5" />
+                                    <span>Client Visits & Meetings ({meets.length})</span>
+                                  </h5>
+                                  <div className="divide-y divide-slate-100 text-xs">
+                                    {meets.map((m) => (
+                                      <div key={m._id} className="py-2 flex items-center justify-between gap-3">
+                                        <div>
+                                          <span className="font-bold text-slate-900">{m.clientName || 'Client'}</span>
+                                          <span className="text-slate-400 text-[11px] ml-2">({m.companyName || 'Store'})</span>
+                                          <p className="text-[11px] text-slate-500 truncate">{m.meetingNotes || m.purpose || 'Meeting completed'}</p>
+                                        </div>
+                                        <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase bg-purple-50 text-purple-700 shrink-0">
+                                          {m.status || 'Done'}
+                                        </span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Expenses Log on this Day */}
+                              {exps.length > 0 && (
+                                <div className="bg-white p-3.5 rounded-2xl border border-slate-200/90 space-y-2">
+                                  <h5 className="text-xs font-black uppercase tracking-wider text-amber-700 flex items-center gap-1.5">
+                                    <Receipt className="w-3.5 h-3.5" />
+                                    <span>Expense Claims on this Day ({exps.length})</span>
+                                  </h5>
+                                  <div className="divide-y divide-slate-100 text-xs">
+                                    {exps.map((e) => (
+                                      <div key={e._id} className="py-2 flex items-center justify-between gap-3">
+                                        <div>
+                                          <span className="font-bold uppercase text-slate-800">{e.category}</span>
+                                          <p className="text-[11px] text-slate-500">{e.description || 'Expense reimbursement'}</p>
+                                        </div>
+                                        <div className="text-right">
+                                          <span className="font-black text-slate-900 block">₹{e.amount}</span>
+                                          <span className="text-[9px] font-extrabold uppercase text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">
+                                            {e.status}
+                                          </span>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="bg-white p-8 rounded-3xl border border-slate-200 text-center text-slate-400 text-xs font-bold">
+                    No field operations recorded for the selected date range.
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ── 1. ATTENDANCE & WORKING HOURS SECTION (CATEGORIZED TABLE) ── */}
+            {(reportType === 'All' || reportType === 'Attendance' || viewLayout === 'categorized') && (
+              <div className="print-avoid-break bg-white rounded-3xl border border-slate-200/90 shadow-xs overflow-hidden space-y-0">
+                <div className="p-5 sm:p-6 bg-slate-50 border-b border-slate-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
+                      <CalendarCheck className="w-5 h-5 text-emerald-600" />
+                      <span>Daily Attendance, Working Hours & Punch Log</span>
+                    </h3>
+                    <p className="text-xs text-slate-500 font-medium mt-0.5">
+                      Verified punch in/out timestamps, total daily shift hours, and geofence verification.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-emerald-800 bg-emerald-100 px-3 py-1 rounded-full">
+                      Present: <strong>{reportData.summary.daysPresent || 0} Days</strong> ({reportData.summary.totalWorkHours || 0} Total Hours)
+                    </span>
+                  </div>
+                </div>
+
+                {reportData.attendances && reportData.attendances.length > 0 ? (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-slate-50 text-slate-500 font-extrabold uppercase tracking-wider border-b border-slate-200">
+                        <tr>
+                          <th className="py-3 px-4 min-w-[120px]">Date & Day</th>
+                          <th className="py-3 px-4 min-w-[100px]">Status</th>
+                          <th className="py-3 px-4 min-w-[110px]">Punch In Time</th>
+                          <th className="py-3 px-4 min-w-[110px]">Punch Out Time</th>
+                          <th className="py-3 px-4 min-w-[110px]">Total Work Hours</th>
+                          <th className="py-3 px-4 min-w-[110px]">Traveled Km</th>
+                          <th className="py-3 px-4 text-right">Verification</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 text-slate-700 font-semibold">
+                        {reportData.attendances.map((a) => {
+                          const dateObj = new Date(a.date);
+                          const formattedDate = dateObj.toLocaleDateString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric',
+                          });
+                          const dayName = dateObj.toLocaleDateString('en-US', { weekday: 'long' });
+
+                          const checkInStr = a.checkIn
+                            ? new Date(a.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                            : '—';
+                          const checkOutStr = a.checkOut
+                            ? new Date(a.checkOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                            : a.status === 'present'
+                            ? 'In Progress'
+                            : '—';
+
+                          return (
+                            <tr key={a._id || a.date} className="hover:bg-slate-50/80 transition">
+                              {/* Date & Day */}
+                              <td className="py-3.5 px-4 whitespace-nowrap">
+                                <div className="font-bold text-slate-900">{formattedDate}</div>
+                                <div className="text-[11px] text-slate-400 font-medium">{dayName}</div>
+                              </td>
+
+                              {/* Status */}
+                              <td className="py-3.5 px-4 whitespace-nowrap">
+                                <span
+                                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black uppercase ${
+                                    a.status === 'present'
+                                      ? 'bg-emerald-100 text-emerald-800'
+                                      : a.status === 'half-day'
+                                      ? 'bg-amber-100 text-amber-800'
+                                      : a.status === 'leave'
+                                      ? 'bg-purple-100 text-purple-800'
+                                      : 'bg-rose-100 text-rose-800'
+                                  }`}
+                                >
+                                  {a.status === 'present' && <Check className="w-3 h-3" />}
+                                  <span>{a.status || 'Present'}</span>
+                                </span>
+                              </td>
+
+                              {/* Punch In */}
+                              <td className="py-3.5 px-4 whitespace-nowrap font-mono font-bold text-slate-800">
+                                {checkInStr}
+                              </td>
+
+                              {/* Punch Out */}
+                              <td className="py-3.5 px-4 whitespace-nowrap font-mono font-bold text-slate-800">
+                                {checkOutStr}
+                              </td>
+
+                              {/* Work Hours */}
+                              <td className="py-3.5 px-4 whitespace-nowrap">
+                                <span className="text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg font-bold">
+                                  {a.totalWorkHours ? `${a.totalWorkHours} hrs` : '—'}
+                                </span>
+                              </td>
+
+                              {/* Traveled Distance */}
+                              <td className="py-3.5 px-4 whitespace-nowrap font-bold text-blue-700">
+                                {(a.totalDistanceTraveled || 0).toFixed(1)} km
+                              </td>
+
+                              {/* Verification Badge */}
+                              <td className="py-3.5 px-4 text-right whitespace-nowrap">
+                                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-md">
+                                  <Shield className="w-3 h-3 text-emerald-600" />
+                                  <span>Geofence Verified</span>
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                      <tfoot className="bg-slate-50 font-black text-slate-900 border-t-2 border-slate-200">
+                        <tr>
+                          <td className="py-3.5 px-4" colSpan="2">
+                            Total Attendance ({reportData.summary.daysPresent || 0} Present Days)
+                          </td>
+                          <td className="py-3.5 px-4" colSpan="2">
+                            —
+                          </td>
+                          <td className="py-3.5 px-4 text-emerald-700">
+                            {reportData.summary.totalWorkHours || 0} hrs Total
+                          </td>
+                          <td className="py-3.5 px-4 text-blue-700" colSpan="2">
+                            {reportData.summary.totalKm.toFixed(1)} km Total
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="p-8 text-center text-slate-400 text-xs font-bold">
+                    No attendance punch records found for this period.
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ── 2. CONSOLIDATED DAILY DISTANCE SECTION (COMBINED BY DATE) ── */}
+            {(reportType === 'All' || reportType === 'Distance' || viewLayout === 'categorized') && (
+              <div className="print-avoid-break bg-white rounded-3xl border border-slate-200/90 shadow-xs overflow-hidden space-y-0">
                 <div className="p-5 sm:p-6 bg-slate-50 border-b border-slate-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                   <div>
                     <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
@@ -858,13 +1501,11 @@ export default function AdminReports() {
                           return (
                             <React.Fragment key={d.date}>
                               <tr className="hover:bg-slate-50/80 transition">
-                                {/* Date & Day */}
                                 <td className="py-3.5 px-4 whitespace-nowrap">
                                   <div className="font-bold text-slate-900">{formattedDate}</div>
                                   <div className="text-[11px] text-slate-400 font-medium">{dayName}</div>
                                 </td>
 
-                                {/* Sessions Count Badge */}
                                 <td className="py-3.5 px-4 whitespace-nowrap">
                                   <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 font-bold text-[11px] print:border print:border-blue-200">
                                     <Layers className="w-3 h-3 print:hidden" />
@@ -872,7 +1513,6 @@ export default function AdminReports() {
                                   </span>
                                 </td>
 
-                                {/* Total Combined Distance */}
                                 <td className="py-3.5 px-4 whitespace-nowrap">
                                   <span className="text-base font-black text-slate-900">
                                     {d.totalDistance.toFixed(2)}{' '}
@@ -880,29 +1520,24 @@ export default function AdminReports() {
                                   </span>
                                 </td>
 
-                                {/* Rate */}
                                 <td className="py-3.5 px-4 whitespace-nowrap font-mono text-slate-500">
                                   ₹{reportData.summary.taRate || 2.5}/km
                                 </td>
 
-                                {/* Daily Travel Pay */}
                                 <td className="py-3.5 px-4 whitespace-nowrap">
                                   <span className="font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg print:border print:border-emerald-200">
                                     ₹{d.travelPay.toFixed(2)}
                                   </span>
                                 </td>
 
-                                {/* Start Address */}
                                 <td className="py-3.5 px-4 max-w-[180px] truncate text-slate-600" title={d.startAddress}>
                                   {d.startAddress || '—'}
                                 </td>
 
-                                {/* End Address */}
                                 <td className="py-3.5 px-4 max-w-[180px] truncate text-slate-600" title={d.endAddress}>
                                   {d.endAddress || '—'}
                                 </td>
 
-                                {/* Expand Details Button */}
                                 <td className="py-3.5 px-4 text-right no-print print:hidden">
                                   <button
                                     type="button"
@@ -919,7 +1554,7 @@ export default function AdminReports() {
                                 </td>
                               </tr>
 
-                              {/* Expanded Individual Sessions Breakdown (Interactive / Screen) */}
+                              {/* Expanded Individual Sessions Breakdown */}
                               {isExpanded && (
                                 <tr className="no-print print:hidden">
                                   <td colSpan="8" className="bg-slate-50 p-4 border-y border-slate-200">
@@ -1016,9 +1651,9 @@ export default function AdminReports() {
               </div>
             )}
 
-            {/* ── 2. CLIENT MEETINGS & VISITS SECTION ── */}
-            {(reportType === 'All' || reportType === 'Meetings') && (
-              <div className="print-avoid-break bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden space-y-0">
+            {/* ── 3. CLIENT MEETINGS & VISITS SECTION ── */}
+            {(reportType === 'All' || reportType === 'Meetings' || viewLayout === 'categorized') && (
+              <div className="print-avoid-break bg-white rounded-3xl border border-slate-200/90 shadow-xs overflow-hidden space-y-0">
                 <div className="p-5 sm:p-6 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
                   <div>
                     <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
@@ -1096,9 +1731,9 @@ export default function AdminReports() {
               </div>
             )}
 
-            {/* ── 3. EXPENSE CLAIMS SECTION ── */}
-            {(reportType === 'All' || reportType === 'Expenses') && (
-              <div className="print-avoid-break bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden space-y-0">
+            {/* ── 4. EXPENSE CLAIMS SECTION ── */}
+            {(reportType === 'All' || reportType === 'Expenses' || viewLayout === 'categorized') && (
+              <div className="print-avoid-break bg-white rounded-3xl border border-slate-200/90 shadow-xs overflow-hidden space-y-0">
                 <div className="p-5 sm:p-6 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
                   <div>
                     <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
@@ -1183,12 +1818,12 @@ export default function AdminReports() {
               </div>
             )}
 
-            {/* ── 4. TASKS & LEADS GRID ── */}
-            {(reportType === 'All' || reportType === 'Tasks' || reportType === 'Leads') && (
+            {/* ── 5. TASKS & LEADS GRID ── */}
+            {(reportType === 'All' || reportType === 'Tasks' || reportType === 'Leads' || viewLayout === 'categorized') && (
               <div className="print-avoid-break grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Tasks Section */}
-                {(reportType === 'All' || reportType === 'Tasks') && (
-                  <div className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden">
+                {(reportType === 'All' || reportType === 'Tasks' || viewLayout === 'categorized') && (
+                  <div className="bg-white rounded-3xl border border-slate-200/90 shadow-xs overflow-hidden">
                     <div className="p-5 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
                       <h4 className="text-sm font-black text-slate-900 flex items-center gap-2">
                         <CheckCircle className="w-4 h-4 text-amber-600" />
@@ -1231,8 +1866,8 @@ export default function AdminReports() {
                 )}
 
                 {/* Leads Section */}
-                {(reportType === 'All' || reportType === 'Leads') && (
-                  <div className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden">
+                {(reportType === 'All' || reportType === 'Leads' || viewLayout === 'categorized') && (
+                  <div className="bg-white rounded-3xl border border-slate-200/90 shadow-xs overflow-hidden">
                     <div className="p-5 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
                       <h4 className="text-sm font-black text-slate-900 flex items-center gap-2">
                         <Target className="w-4 h-4 text-rose-600" />
@@ -1273,6 +1908,25 @@ export default function AdminReports() {
                 )}
               </div>
             )}
+
+            {/* ── Official Print Authorization Block ── */}
+            <div className="hidden print:block pt-8 mt-6 border-t-2 border-slate-300 print-avoid-break">
+              <div className="grid grid-cols-3 gap-6 text-xs text-slate-600">
+                <div className="border-t border-slate-400 pt-2">
+                  <p className="font-bold text-slate-900">Employee Signature</p>
+                  <p className="text-[10px] text-slate-400 mt-0.5">I verify that all recorded visits & claims are accurate.</p>
+                </div>
+                <div className="border-t border-slate-400 pt-2">
+                  <p className="font-bold text-slate-900">Supervisor / Manager Verification</p>
+                  <p className="text-[10px] text-slate-400 mt-0.5">Checked & Approved for Reimbursement</p>
+                </div>
+                <div className="border-t border-slate-400 pt-2 text-right">
+                  <p className="font-bold text-slate-900">Official Company Seal</p>
+                  <p className="text-[10px] text-slate-400 mt-0.5">KisanConnect Operations Audit</p>
+                </div>
+              </div>
+            </div>
+
           </div>
         )}
       </div>
