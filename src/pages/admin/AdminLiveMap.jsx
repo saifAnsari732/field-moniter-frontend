@@ -142,7 +142,11 @@ function detectStoppages(coordinates, minMinutes = 3, clusterRadiusM = 50) {
 
 // Evaluate real-time movement state (Moving vs Stopped)
 function getEmployeeMotionStatus(loc, emp) {
-  const isActive = Boolean(loc?.isActive !== false && (loc?.isActive || emp?.isTracking));
+  const isActive = Boolean(
+    (loc?.isActive === true || emp?.isTracking === true) &&
+    loc?.manuallyStopped !== true &&
+    loc?.autoClosed !== true
+  );
   if (!isActive) {
     return {
       status: "OFFLINE",
@@ -629,41 +633,38 @@ export default function AdminLiveMap() {
     return { map, stationarySet };
   }, [employees, locations]);
 
-  // Employees actively tracking
-  const trackingEmployees = employees.filter(emp => {
+  const isEmpTracking = (emp) => {
     const empIdStr = String(emp._id);
     const loc = locations[empIdStr] || locations[emp._id];
-    return emp.isTracking || (loc && loc.isActive);
-  });
+    return Boolean(
+      (loc?.isActive === true || emp.isTracking === true) &&
+      loc?.manuallyStopped !== true &&
+      loc?.autoClosed !== true
+    );
+  };
+
+  // Employees actively tracking
+  const trackingEmployees = employees.filter(isEmpTracking);
 
   const teamList = employees;
 
   const stats = {
-    Active: teamList.filter(emp => {
-      const empIdStr = String(emp._id);
-      const loc = locations[empIdStr] || locations[emp._id];
-      return loc?.isActive || emp.isTracking;
-    }).length,
+    Active: teamList.filter(isEmpTracking).length,
     All: teamList.length,
-    Away: teamList.filter(emp => {
-      const empIdStr = String(emp._id);
-      const loc = locations[empIdStr] || locations[emp._id];
-      return !loc?.isActive && !emp.isTracking;
-    }).length,
+    Away: teamList.filter(emp => !isEmpTracking(emp)).length,
     Stationary: motionStatusMap.stationarySet.size,
   };
 
   const filteredEmployees = teamList.filter(emp => {
     const empIdStr = String(emp._id);
-    const loc = locations[empIdStr] || locations[emp._id];
     const matchesSearch = emp.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (emp.department && emp.department.toLowerCase().includes(searchQuery.toLowerCase())) ||
       (emp.employeeId && emp.employeeId.toLowerCase().includes(searchQuery.toLowerCase()));
     if (!matchesSearch) return false;
 
-    if (activeFilter === "Active") return loc?.isActive || emp.isTracking || ((loc?.totalDistance || 0) > 0);
+    if (activeFilter === "Active") return isEmpTracking(emp);
     if (activeFilter === "All") return true;
-    if (activeFilter === "Away") return !loc?.isActive && !emp.isTracking;
+    if (activeFilter === "Away") return !isEmpTracking(emp);
     if (activeFilter === "Stationary") return motionStatusMap.stationarySet.has(empIdStr);
     return true;
   });
