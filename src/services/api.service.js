@@ -18,6 +18,7 @@ const resolveApiBase = () => {
   if (
     !url ||
     url.includes('crm-b-y8rv') ||
+    url.includes('onrender.com') ||
     url === 'undefined' ||
     (!isLocalHostDomain && url.includes('localhost'))
   ) {
