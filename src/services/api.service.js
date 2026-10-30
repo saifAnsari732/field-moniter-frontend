@@ -3,8 +3,8 @@ import axios from 'axios';
 // ==========================================
 // BACKEND API BASE CONFIGURATION (DUAL ENV)
 // ==========================================
-// export const DEV_API_URL = 'http://localhost:5001/api';
-export const DEV_API_URL = 'https://field-backend-monitor-web.onrender.com/api';
+export const DEV_API_URL = 'http://localhost:5001/api';
+// export const DEV_API_URL = 'https://field-backend-monitor-web.onrender.com/api';
  
 //  ?dfhbkj
 const resolveApiBase = () => {
@@ -19,6 +19,8 @@ const resolveApiBase = () => {
     !url ||
     url.includes('crm-b-y8rv') ||
     url.includes('onrender.com') ||
+    url.includes('kisanteamapp.online') ||
+    isLocalHostDomain ||
     url === 'undefined' ||
     (!isLocalHostDomain && url.includes('localhost'))
   ) {

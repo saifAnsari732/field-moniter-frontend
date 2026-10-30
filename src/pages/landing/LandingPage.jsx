@@ -1524,7 +1524,6 @@ export default function LandingPage() {
                 autoPlay
                 loop
                 muted
-                defaultMuted
                 playsInline
                 className="w-full h-full object-cover rounded-3xl"
               />

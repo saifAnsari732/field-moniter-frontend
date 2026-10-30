@@ -117,7 +117,11 @@ const playAlertSound = () => {
 export const initSocket = (token) => {
   if (socket?.connected) return socket;
 
-  const socketUrl = process.env.REACT_APP_SOCKET_URL || 'https://kisanteamapp.online';
+  const isLocalHost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+  let socketUrl = (process.env.REACT_APP_SOCKET_URL || '').trim();
+  if (!socketUrl || socketUrl.includes('kisanteamapp.online') || isLocalHost) {
+    socketUrl = 'http://localhost:5001';
+  }
   socket = io(
     socketUrl,
     {
