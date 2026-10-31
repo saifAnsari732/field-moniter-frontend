@@ -220,25 +220,30 @@ function getEmployeeMotionStatus(loc, emp) {
     }
   }
 
-  if (isStopped) {
+  // Ground-Truth: If speed < 3 km/h or only 1 waypoint recorded, the employee is genuinely STATIONARY/STOPPED!
+  if (isStopped || speedKmh < 3 || (!path || path.length <= 1)) {
+    const startTs = loc?.startTime ? new Date(loc.startTime).getTime() : Date.now();
+    const durationFromStart = Math.max(1, Math.round((Date.now() - startTs) / 60000));
+    const effectiveStoppedMins = stoppedMinutes > 0 ? stoppedMinutes : durationFromStart;
+
     return {
       status: "STOPPED",
-      label: `Stopped • ${formatDurationMinutes(stoppedMinutes)}`,
+      label: `Stationary • ${formatDurationMinutes(effectiveStoppedMins)}`,
       isMoving: false,
       isStopped: true,
       speedKmh: 0,
-      stoppedMinutes,
-      stoppedStr: formatDurationMinutes(stoppedMinutes),
-      stoppedLongStr: formatDurationLong(stoppedMinutes)
+      stoppedMinutes: effectiveStoppedMins,
+      stoppedStr: formatDurationMinutes(effectiveStoppedMins),
+      stoppedLongStr: formatDurationLong(effectiveStoppedMins)
     };
   }
 
   return {
     status: "MOVING",
-    label: `Moving • ${speedKmh > 0 ? speedKmh : 15} km/h`,
+    label: `Moving • ${speedKmh} km/h`,
     isMoving: true,
     isStopped: false,
-    speedKmh: speedKmh > 0 ? speedKmh : 15,
+    speedKmh: speedKmh,
     stoppedMinutes: 0,
     stoppedStr: "",
     stoppedLongStr: ""
