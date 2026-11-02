@@ -128,6 +128,52 @@ export const AuthProvider = ({ children }) => {
     return () => clearTokenRefresh();
   }, [loadUser, clearTokenRefresh]);
 
+  // Real-time subscription lifecycle events over WebSockets
+  useEffect(() => {
+    const handleSubscriptionExpired = (payload) => {
+      setOrganization((prev) => {
+        if (!prev) return prev;
+        const updated = { ...prev, status: 'unpaid' };
+        localStorage.setItem('organization', JSON.stringify(updated));
+        return updated;
+      });
+      toast.error('⚠️ Your Organization subscription has expired. Operations are paused.', {
+        id: 'realtime-sub-expired',
+        duration: 7000,
+      });
+    };
+
+    const handleSubscriptionActivated = (payload) => {
+      setOrganization((prev) => {
+        if (!prev) return prev;
+        const updated = { ...prev, status: 'active', plan: payload?.plan || prev.plan };
+        localStorage.setItem('organization', JSON.stringify(updated));
+        return updated;
+      });
+      toast.success('🎉 Subscription active! All features unlocked.', {
+        id: 'realtime-sub-activated',
+        duration: 7000,
+      });
+    };
+
+    const token = localStorage.getItem('token');
+    let socketInstance = null;
+    if (token) {
+      socketInstance = initSocket(token);
+      if (socketInstance) {
+        socketInstance.on('subscription_expired', handleSubscriptionExpired);
+        socketInstance.on('subscription_activated', handleSubscriptionActivated);
+      }
+    }
+
+    return () => {
+      if (socketInstance) {
+        socketInstance.off('subscription_expired', handleSubscriptionExpired);
+        socketInstance.off('subscription_activated', handleSubscriptionActivated);
+      }
+    };
+  }, [isAuthenticated]);
+
   const login = async (email, password) => {
     try {
       setAuthError(null);

@@ -3,8 +3,8 @@ import axios from 'axios';
 // ==========================================
 // BACKEND API BASE CONFIGURATION (DUAL ENV)
 // ==========================================
-// export const DEV_API_URL = 'http://localhost:5001/api';
-export const DEV_API_URL = 'https://field-backend-monitor-web.onrender.com/api';
+export const DEV_API_URL = 'http://localhost:5001/api';
+// export const DEV_API_URL = 'https://field-backend-monitor-web.onrender.com/api';
  
 //  ?dfhbkj
 const resolveApiBase = () => {
@@ -59,6 +59,14 @@ API.interceptors.request.use((config) => {
   const token = localStorage.getItem('token');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
+  }
+  const storedOrg = localStorage.getItem('organization');
+  if (storedOrg) {
+    try {
+      const parsed = JSON.parse(storedOrg);
+      const orgId = parsed?._id || parsed?.id;
+      if (orgId) config.headers['x-organization-id'] = orgId;
+    } catch {}
   }
   return config;
 });

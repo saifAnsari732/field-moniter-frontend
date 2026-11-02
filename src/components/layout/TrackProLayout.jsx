@@ -37,9 +37,11 @@ import {
   Copy,
   ExternalLink,
   Check,
+  Lock,
 } from 'lucide-react';
 import Avatar from '../shared/Avatar';
 import BroadcastAlertPopup from '../shared/BroadcastAlertPopup';
+import SubscriptionPaywallLock from '../shared/SubscriptionPaywallLock';
 import toast from 'react-hot-toast';
 
 export default function KisanConnectLayout({ children }) {
@@ -70,6 +72,15 @@ export default function KisanConnectLayout({ children }) {
     Boolean(organization?.plan?.expiresAt) &&
     new Date(organization.plan.expiresAt) > new Date()
   );
+
+  const isAllowedWhenExpired =
+    isSuperAdmin ||
+    location.pathname === '/admin/billing' ||
+    location.pathname === '/admin/plan' ||
+    location.pathname === '/profile' ||
+    location.pathname === '/admin/profile';
+
+  const isScreenLocked = !isPlanActive && !isAllowedWhenExpired;
 
   const navItems = [
     { to: '/admin', icon: LayoutDashboard, label: 'Dashboard', end: true },
@@ -206,24 +217,34 @@ export default function KisanConnectLayout({ children }) {
                   ? location.pathname === item.to
                   : location.pathname.startsWith(item.to);
 
+                const isLockedItem = !isPlanActive && !item.isBilling;
                 return (
                   <NavLink
                     key={item.to}
-                    to={item.to}
-                    onClick={() => setMobileMenuOpen(false)}
+                    to={isLockedItem ? '/admin/billing' : item.to}
+                    onClick={() => {
+                      setMobileMenuOpen(false);
+                      if (isLockedItem) {
+                        toast.error('🔒 Subscription expired! Please renew plan in Billing to unlock operations.', { id: 'plan-expired-toast' });
+                      }
+                    }}
                     className={`flex items-center gap-3 py-2.5 px-3.5 rounded-xl text-[14px] transition-all duration-150 group ${
                       isActive
                         ? 'bg-rose-50/90 text-rose-700 font-bold border border-rose-200/80 shadow-2xs'
+                        : isLockedItem
+                        ? 'text-slate-400 font-medium hover:bg-rose-50/50 hover:text-rose-600 border border-transparent'
                         : 'text-slate-600 font-medium hover:bg-slate-50 hover:text-slate-900 border border-transparent'
                     }`}
                   >
-                    <Icon className={`w-4 h-4 flex-shrink-0 transition-colors ${isActive ? 'text-rose-600 stroke-[2.2]' : 'text-slate-400 group-hover:text-slate-600 stroke-[1.8]'}`} />
+                    <Icon className={`w-4 h-4 flex-shrink-0 transition-colors ${isActive ? 'text-rose-600 stroke-[2.2]' : isLockedItem ? 'text-slate-300 group-hover:text-rose-500 stroke-[1.8]' : 'text-slate-400 group-hover:text-slate-600 stroke-[1.8]'}`} />
                     <span className="tracking-tight">{item.label}</span>
-                    {item.isBilling && !isPlanActive && isOrgAdmin && (
-                      <span className="ml-auto text-[9px] font-extrabold uppercase tracking-wider bg-rose-600 text-white px-2 py-0.5 rounded-full shadow-2xs animate-pulse">
-                        Unpaid
+                    {item.isBilling && !isPlanActive ? (
+                      <span className="ml-auto text-[9px] font-black uppercase tracking-wider bg-rose-600 text-white px-2 py-0.5 rounded-full shadow-2xs animate-pulse">
+                        RENEW
                       </span>
-                    )}
+                    ) : isLockedItem ? (
+                      <Lock className="w-3.5 h-3.5 text-slate-300 group-hover:text-rose-500 ml-auto flex-shrink-0 transition-colors" />
+                    ) : null}
                   </NavLink>
                 );
               })
@@ -346,31 +367,37 @@ export default function KisanConnectLayout({ children }) {
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0 lg:pl-72 print:pl-0">
-        {/* Full-Width Red Header Alert Bar: Plan Not Active */}
-        {!isPlanActive && isOrgAdmin && (
-          <div className="w-full bg-red-600 border-b border-red-700 text-white px-4 sm:px-6 py-2.5 shadow-md flex items-center justify-between gap-3 text-xs sm:text-sm font-bold sticky top-0 z-50 animate-pulse print:hidden">
+        {/* Full-Width Rose Header Alert Bar: Subscription Expired */}
+        {!isPlanActive && (
+          <div className="w-full bg-rose-600 border-b border-rose-700 text-white px-4 sm:px-6 py-2.5 shadow-md flex items-center justify-between gap-3 text-xs sm:text-sm font-bold sticky top-0 z-50 animate-pulse print:hidden">
             <div className="flex items-center gap-2.5 min-w-0">
               <span className="w-2.5 h-2.5 rounded-full bg-white animate-ping flex-shrink-0" />
               <AlertTriangle className="w-5 h-5 flex-shrink-0 text-white" />
               <div className="flex flex-wrap items-center gap-2 min-w-0">
                 <span className="bg-black/30 text-white px-2 py-0.5 rounded text-[11px] font-black uppercase tracking-wider">
-                  PLAN NOT ACTIVE
+                  SUBSCRIPTION EXPIRED
                 </span>
                 <span className="font-extrabold uppercase tracking-wide">
-                  BILLING ENABLE FIRST
+                  OPERATIONS PAUSED
                 </span>
-                <span className="hidden lg:inline font-semibold text-red-100">
-                  — Please purchase a subscription plan to add employees & unlock full operations.
+                <span className="hidden lg:inline font-semibold text-rose-100">
+                  — Please renew subscription in Billing to resume GPS tracking, attendance & reports.
                 </span>
               </div>
             </div>
 
-            <button
-              onClick={() => navigate('/admin/billing')}
-              className="bg-white text-red-700 hover:bg-red-50 hover:shadow-md px-4 py-1.5 rounded-xl text-xs font-black shadow-sm transition transform active:scale-95 whitespace-nowrap flex items-center gap-1.5 flex-shrink-0 uppercase tracking-wider"
-            >
-              <CreditCard className="w-3.5 h-3.5" /> Enable Billing
-            </button>
+            {isOrgAdmin ? (
+              <button
+                onClick={() => navigate('/admin/billing')}
+                className="bg-white text-rose-700 hover:bg-rose-50 hover:shadow-md px-4 py-1.5 rounded-xl text-xs font-black shadow-sm transition transform active:scale-95 whitespace-nowrap flex items-center gap-1.5 flex-shrink-0 uppercase tracking-wider cursor-pointer"
+              >
+                <CreditCard className="w-3.5 h-3.5" /> Enable Billing
+              </button>
+            ) : (
+              <span className="text-[11px] font-bold text-rose-100 bg-black/25 px-3 py-1 rounded-xl whitespace-nowrap">
+                Contact Admin to Renew
+              </span>
+            )}
           </div>
         )}
 
@@ -424,7 +451,18 @@ export default function KisanConnectLayout({ children }) {
         </header>
 
         {/* Screen Content Outlet */}
-        <main className="flex-1 p-4 sm:p-6 overflow-y-auto w-full min-w-0 print:p-0 print:m-0 print:overflow-visible">{children}</main>
+        <main className="flex-1 p-4 sm:p-6 overflow-y-auto w-full min-w-0 print:p-0 print:m-0 print:overflow-visible">
+          {isScreenLocked ? (
+            <SubscriptionPaywallLock
+              organization={organization}
+              user={user}
+              onRenew={() => navigate('/admin/billing')}
+              onSupport={() => setShowSupportModal(true)}
+            />
+          ) : (
+            children
+          )}
+        </main>
       </div>
 
       {/* ─── 24/7 PRIORITY SUPPORT MODAL ────────────────────────────────── */}

@@ -145,9 +145,32 @@ export const initiateRazorpayCheckout = async ({
     };
 
     const rzp = new window.Razorpay(options);
-    rzp.on('payment.failed', function (paymentFailResponse) {
+    rzp.on('payment.failed', async function (paymentFailResponse) {
       console.error('Payment Failed:', paymentFailResponse.error);
-      alert(`Payment Failed: ${paymentFailResponse.error.description}`);
+      const desc = paymentFailResponse.error?.description || '';
+      try {
+        await axios.post(`${API_BASE}/payment/record-failure`, {
+          razorpay_order_id: orderId,
+          razorpay_payment_id: paymentFailResponse.error?.metadata?.payment_id || '',
+          error: paymentFailResponse.error,
+        }, { headers });
+      } catch (e) {
+        // Ignore failure reporting error
+      }
+
+      if (desc.toLowerCase().includes('website does not match registered')) {
+        alert(
+          '⚠️ Razorpay Live Security Notice:\n\n' +
+          'Payment was blocked because this website domain (' + window.location.hostname + ') is not registered in your Razorpay Dashboard.\n\n' +
+          'To enable Live Payments:\n' +
+          '1. Log into your Razorpay Merchant Dashboard.\n' +
+          '2. Go to Settings > Website and App Details.\n' +
+          '3. Add "' + window.location.origin + '" to your registered websites.\n\n' +
+          'Note: You can also use the "Instant Activate & Verify" button in your Billing dashboard to activate your plan immediately!'
+        );
+      } else {
+        alert(`Payment Failed: ${desc || 'Payment could not be completed'}`);
+      }
       onFailure(paymentFailResponse.error);
     });
 

@@ -43,6 +43,8 @@ export default function AdminBilling() {
   const [addonEmployeeSeats, setAddonEmployeeSeats] = useState(1);
   const [addonManagerSeats, setAddonManagerSeats] = useState(0);
   const [addonCheckoutLoading, setAddonCheckoutLoading] = useState(false);
+  const [directLoading, setDirectLoading] = useState(false);
+  const [syncingOrderId, setSyncingOrderId] = useState(null);
 
   // Payment History
   const [payments, setPayments] = useState([]);
@@ -207,6 +209,80 @@ export default function AdminBilling() {
   let discountAmount = appliedCoupon ? appliedCoupon.discount : 0;
   const payableAmount = Math.max(1, originalAmount - discountAmount);
 
+  // Projected Expiration Date based on 1 Month (30d) vs 1 Year (365d)
+  const projectedDays = billingCycle === 'yearly' ? 365 : 30;
+  const currentExpiryTime = expiresAt && expiresAt > new Date() ? expiresAt.getTime() : Date.now();
+  const projectedExpiryDate = new Date(currentExpiryTime + projectedDays * 24 * 60 * 60 * 1000);
+
+  // Direct / Simulated 1 Month or 1 Year Activation Handler
+  const handleDirectActivate = async () => {
+    setDirectLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const orgId = currentOrg?._id || currentOrg?.id || '';
+      const res = await axios.post(
+        `${API_BASE}/payment/activate-direct`,
+        {
+          plan: selectedPlan,
+          billingCycle,
+          couponCode: appliedCoupon ? appliedCoupon.couponCode : '',
+          organizationId: orgId,
+        },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      if (res.data?.success) {
+        toast.success(res.data.message || `🎉 ${billingCycle === 'yearly' ? '1 Year' : '1 Month'} subscription activated successfully!`);
+        if (refreshUser) await refreshUser();
+        fetchPaymentHistory();
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Direct plan activation failed.');
+    } finally {
+      setDirectLoading(false);
+    }
+  };
+
+  // 🔄 Sync Single Order with Razorpay API (handles missed webhook or pending capture)
+  const handleSyncOrder = async (orderId) => {
+    if (!orderId) return;
+    setSyncingOrderId(orderId);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.post(
+        `${API_BASE}/payment/sync-order`,
+        { orderId },
+        { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+      );
+      if (res.data?.success) {
+        toast.success(res.data.message || '🎉 Payment confirmed on Razorpay! Plan activated.');
+        if (refreshUser) await refreshUser();
+        fetchPaymentHistory();
+      } else {
+        toast.error(res.data?.message || 'Payment not completed on Razorpay.');
+        fetchPaymentHistory();
+      }
+    } catch (err) {
+      const failMsg = err.response?.data?.message || err.message;
+      const hint = err.response?.data?.helpHint;
+      toast.error(failMsg);
+      if (hint) {
+        toast(
+          (t) => (
+            <div className="text-xs">
+              <p className="font-bold text-slate-900 mb-1">Razorpay Whitelisting Notice:</p>
+              <p className="text-slate-600">{hint}</p>
+            </div>
+          ),
+          { duration: 10000, icon: '💡' }
+        );
+      }
+      fetchPaymentHistory();
+    } finally {
+      setSyncingOrderId(null);
+    }
+  };
+
   // Apply Coupon Handler
   const handleApplyCoupon = async (e) => {
     e.preventDefault();
@@ -221,6 +297,7 @@ export default function AdminBilling() {
         couponCode: couponCode.trim(),
         plan: selectedPlan,
         billingCycle,
+        organizationId: currentOrg?._id || currentOrg?.id,
       });
 
       if (res.data?.success) {
@@ -367,14 +444,26 @@ export default function AdminBilling() {
 
           <div className="flex items-center gap-3">
             <button
-              onClick={() => {
-                if (refreshUser) refreshUser();
+              onClick={async () => {
+                try {
+                  const token = localStorage.getItem('token');
+                  const orgId = currentOrg?._id || currentOrg?.id;
+                  await axios.post(
+                    `${API_BASE}/payment/sync-latest`,
+                    { organizationId: orgId },
+                    { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+                  );
+                } catch (e) {
+                  // ignore
+                }
+                if (refreshUser) await refreshUser();
                 fetchPaymentHistory();
+                toast.success('Subscription status synced with payment gateway!');
               }}
               className="inline-flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-50 transition shadow-sm cursor-pointer"
             >
-              <RefreshCw className="w-4 h-4 text-slate-500" />
-              <span>Refresh Status</span>
+              <RefreshCw className="w-4 h-4 text-emerald-600" />
+              <span>Sync Gateway & Refresh</span>
             </button>
           </div>
         </div>
@@ -804,6 +893,29 @@ export default function AdminBilling() {
           </div>
         </div>
 
+        {/* 🛡️ Razorpay Live Whitelisting Advisory Notice */}
+        <div className="p-4 bg-gradient-to-r from-blue-50/90 via-indigo-50/60 to-white border border-blue-200 rounded-3xl flex items-start gap-3.5 text-xs text-blue-900 shadow-xs">
+          <div className="w-8 h-8 rounded-xl bg-blue-100 border border-blue-200 text-blue-700 flex items-center justify-center shrink-0 mt-0.5">
+            <ShieldCheck className="w-4 h-4" />
+          </div>
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <span className="font-black text-blue-950 uppercase tracking-wider text-[11px]">
+                Razorpay Live Gateway Security Notice
+              </span>
+              <span className="text-[10px] bg-blue-200/80 text-blue-900 font-extrabold px-2 py-0.5 rounded-full">
+                Active
+              </span>
+            </div>
+            <p className="text-blue-800 leading-relaxed font-medium">
+              If Razorpay blocks payment with <strong className="text-blue-950 font-bold">"Payment blocked as website does not match registered website"</strong>, your current domain (<code className="bg-blue-100 text-blue-950 px-1 py-0.5 rounded font-mono font-bold text-[11px]">{typeof window !== 'undefined' ? window.location.hostname : 'field-moniter-frontend.vercel.app'}</code>) must be whitelisted under <strong className="text-blue-950">Razorpay Dashboard &gt; Settings &gt; Website &amp; App Details</strong>.
+            </p>
+            <p className="text-[11px] text-blue-700 font-medium">
+              💡 <em>Alternatively, you can test and activate your plan immediately using the <strong>"Instant Activate &amp; Verify"</strong> button below.</em>
+            </p>
+          </div>
+        </div>
+
         {/* 3. BILLING CYCLE TOGGLE (YEARLY SAVE 5% OFF) */}
         <div id="subscription-plans-section" className="text-center space-y-4 pt-4 scroll-mt-6">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-extrabold uppercase tracking-wider">
@@ -818,19 +930,22 @@ export default function AdminBilling() {
             Upgrade or renew seamlessly. All plans include 100% data isolation, live GPS route telemetry, and full mobile integration.
           </p>
 
-          {/* Toggle pill */}
+          {/* Toggle pill: 1 Month vs 1 Year */}
           <div className="flex items-center justify-center gap-3 pt-2">
             <div className="inline-flex p-1.5 bg-slate-100 rounded-2xl border border-slate-200/90 shadow-inner">
               <button
                 type="button"
                 onClick={() => setBillingCycle('monthly')}
-                className={`px-6 py-2.5 rounded-xl text-xs font-black transition cursor-pointer ${
+                className={`px-6 py-2.5 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-2 ${
                   billingCycle === 'monthly'
                     ? 'bg-white text-slate-900 shadow-sm'
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
-                Monthly Billing
+                <span>1 Month (Monthly)</span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-slate-200 text-slate-700">
+                  30 Days
+                </span>
               </button>
 
               <button
@@ -842,7 +957,7 @@ export default function AdminBilling() {
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
-                <span>Yearly Billing</span>
+                <span>1 Year (Annual)</span>
                 <span
                   className={`text-[10px] px-2 py-0.5 rounded-full font-black uppercase tracking-wider ${
                     billingCycle === 'yearly'
@@ -850,7 +965,7 @@ export default function AdminBilling() {
                       : 'bg-emerald-100 text-emerald-800'
                   }`}
                 >
-                  SAVE 5% OFF
+                  365 Days • SAVE 5% OFF
                 </span>
               </button>
             </div>
@@ -1008,8 +1123,29 @@ export default function AdminBilling() {
                 <div className="flex justify-between py-1.5">
                   <span>Selected Subscription:</span>
                   <strong className="text-slate-900">
-                    {activePlanData.name} ({billingCycle.toUpperCase()})
+                    {activePlanData.name} ({billingCycle === 'yearly' ? '1 Year' : '1 Month'})
                   </strong>
+                </div>
+
+                <div className="flex justify-between py-1.5">
+                  <span>Billing Duration:</span>
+                  <span className="font-bold text-indigo-700">
+                    {billingCycle === 'yearly' ? '365 Days (1 Full Year)' : '30 Days (1 Month)'}
+                  </span>
+                </div>
+
+                <div className="flex justify-between py-1.5">
+                  <span>Projected Expiration:</span>
+                  <span className="font-bold text-slate-900">
+                    {projectedExpiryDate.toLocaleDateString('en-IN', {
+                      day: 'numeric',
+                      month: 'short',
+                      year: 'numeric',
+                    })}{' '}
+                    <span className="text-emerald-600 text-xs font-black">
+                      (+{projectedDays}d)
+                    </span>
+                  </span>
                 </div>
 
                 <div className="flex justify-between py-1.5">
@@ -1041,7 +1177,7 @@ export default function AdminBilling() {
               <button
                 type="button"
                 onClick={handleCheckout}
-                disabled={checkoutLoading}
+                disabled={checkoutLoading || directLoading}
                 className="w-full py-4 px-6 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-sm shadow-lg shadow-emerald-600/25 transition active:scale-98 flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
               >
                 {checkoutLoading ? (
@@ -1051,6 +1187,24 @@ export default function AdminBilling() {
                     <CreditCard className="w-4 h-4 text-amber-300" />
                     <span>PAY ₹{payableAmount} VIA RAZORPAY NOW</span>
                     <ArrowRight className="w-4 h-4" />
+                  </>
+                )}
+              </button>
+
+              {/* Instant Test / Direct Verification Option */}
+              <button
+                type="button"
+                onClick={handleDirectActivate}
+                disabled={directLoading || checkoutLoading}
+                className="w-full py-3 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-emerald-400 font-bold text-xs border border-slate-700 transition active:scale-98 flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer shadow-sm"
+                title="Instant test mode: activate and verify 1 Month or 1 Year subscription immediately"
+              >
+                {directLoading ? (
+                  <span>Activating Plan...</span>
+                ) : (
+                  <>
+                    <Zap className="w-4 h-4 text-amber-400" />
+                    <span>Instant Activate & Verify ({billingCycle === 'yearly' ? '1 Year • 365 Days' : '1 Month • 30 Days'})</span>
                   </>
                 )}
               </button>
@@ -1124,17 +1278,37 @@ export default function AdminBilling() {
                           {pay.razorpayOrderId || 'N/A'}
                         </td>
                         <td className="py-3.5 px-4">
-                          <span
-                            className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
-                              pay.status === 'paid'
-                                ? 'bg-emerald-100 text-emerald-800'
-                                : pay.status === 'failed'
-                                ? 'bg-rose-100 text-rose-800'
-                                : 'bg-amber-100 text-amber-800'
-                            }`}
-                          >
-                            {pay.status}
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                                pay.status === 'paid'
+                                  ? 'bg-emerald-100 text-emerald-800'
+                                  : pay.status === 'failed'
+                                  ? 'bg-rose-100 text-rose-800'
+                                  : 'bg-amber-100 text-amber-800'
+                              }`}
+                            >
+                              {pay.status}
+                            </span>
+
+                            {pay.status !== 'paid' && pay.razorpayOrderId && (
+                              <button
+                                type="button"
+                                disabled={syncingOrderId === pay.razorpayOrderId}
+                                onClick={() => handleSyncOrder(pay.razorpayOrderId)}
+                                className="px-2 py-0.5 rounded-md text-[10px] font-black bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 transition cursor-pointer flex items-center gap-1 shadow-xs"
+                                title="Check with Razorpay if money was captured to activate your subscription"
+                              >
+                                <RefreshCw className={`w-2.5 h-2.5 ${syncingOrderId === pay.razorpayOrderId ? 'animate-spin' : ''}`} />
+                                <span>Sync</span>
+                              </button>
+                            )}
+                          </div>
+                          {pay.failureReason && (
+                            <div className="text-[10px] text-rose-600 font-semibold mt-1 max-w-[220px] truncate" title={pay.failureReason}>
+                              {pay.failureReason}
+                            </div>
+                          )}
                         </td>
                         <td className="py-3.5 px-4 text-right">
                           <button
