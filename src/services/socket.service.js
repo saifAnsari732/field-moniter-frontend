@@ -119,8 +119,17 @@ export const initSocket = (token) => {
 
   const isLocalHost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
   let socketUrl = (process.env.REACT_APP_SOCKET_URL || '').trim();
-  if (!socketUrl || socketUrl.includes('kisanteamapp.online') || isLocalHost) {
-    socketUrl = 'http://localhost:5001';
+
+  // 🛡️ When running in production on Vercel (or any non-localhost environment), always route to the live Render backend
+  if (!isLocalHost) {
+    if (!socketUrl || socketUrl.includes('localhost') || socketUrl.includes('127.0.0.1') || socketUrl.includes('kisanteamapp.online')) {
+      socketUrl = 'https://field-backend-monitor-web.onrender.com';
+    }
+  } else {
+    // If on localhost and no remote URL configured, use local backend
+    if (!socketUrl || socketUrl.includes('kisanteamapp.online')) {
+      socketUrl = 'http://localhost:5001';
+    }
   }
   socket = io(
     socketUrl,
