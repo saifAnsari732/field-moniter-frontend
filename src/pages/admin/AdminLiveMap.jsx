@@ -350,14 +350,29 @@ function FlyTo({ center, zoom }) {
   return null;
 }
 
-// Filter out :sync: coordinates and duplicate collision points
+// Filter out :sync: coordinates, sort chronologically, and suppress teleport jumps
 function filterCleanCoords(rawCoords) {
   if (!Array.isArray(rawCoords)) return [];
+  
+  // 1. Sort by true GNSS capture timestamp
+  const getTs = (pt) => {
+    if (pt?.eventId && typeof pt.eventId === 'string') {
+      const parts = pt.eventId.split(':');
+      if (parts.length >= 2 && !isNaN(Number(parts[1])) && Number(parts[1]) > 1700000000000) {
+        return Number(parts[1]);
+      }
+    }
+    return pt?.timestamp ? new Date(pt.timestamp).getTime() : 0;
+  };
+
+  const sortedCoords = [...rawCoords].sort((a, b) => getTs(a) - getTs(b));
+
   const clean = [];
   let lastLat = null;
   let lastLng = null;
+  let lastTs = null;
 
-  for (const c of rawCoords) {
+  for (const c of sortedCoords) {
     if (!c) continue;
     // Filter out :sync: coordinates (eliminates duplicate collision zig-zag paths)
     if (c.eventId && typeof c.eventId === 'string' && c.eventId.includes(':sync:')) {
@@ -368,10 +383,21 @@ function filterCleanCoords(rawCoords) {
     if (!Number.isFinite(lat) || !Number.isFinite(lng) || isNaN(lat) || isNaN(lng)) continue;
     if (lat === 0 && lng === 0) continue;
 
+    const currTs = getTs(c);
+
     // Filter consecutive duplicate collision points
     if (lastLat !== null && lastLng !== null) {
       if (Math.abs(lat - lastLat) < 0.00001 && Math.abs(lng - lastLng) < 0.00001) {
         continue;
+      }
+
+      // Teleportation ray guard: ignore isolated multi-km jumps (> 4 km) with unrealistic speed (> 160 km/h)
+      const dLat = (lat - lastLat) * 111000;
+      const dLng = (lng - lastLng) * 111000 * Math.cos((lat * Math.PI) / 180);
+      const stepDistM = Math.hypot(dLat, dLng);
+      const dtSec = lastTs && currTs ? Math.abs((currTs - lastTs) / 1000) : 0;
+      if (stepDistM > 4000 && (dtSec < 60 || (dtSec > 0 && (stepDistM / dtSec) * 3.6 > 160))) {
+        continue; // Discard isolated teleport ray from map polyline
       }
     }
 
@@ -385,6 +411,7 @@ function filterCleanCoords(rawCoords) {
     });
     lastLat = lat;
     lastLng = lng;
+    lastTs = currTs;
   }
   return clean;
 }
