@@ -22,7 +22,7 @@ export const loadRazorpaySDK = () => {
   });
 };
 
-// 💳 Initiate Razorpay Checkout with Live Keys & Coupon Support
+// 💳 Initiate Razorpay Checkout with Live Keys, Coupon Support & Auto-Capture Polling
 export const initiateRazorpayCheckout = async ({
   plan = 'pro',
   billingCycle = 'monthly',
@@ -39,6 +39,16 @@ export const initiateRazorpayCheckout = async ({
   onSuccess = () => {},
   onFailure = () => {},
 }) => {
+  let paymentResolved = false;
+  let pollInterval = null;
+
+  const stopPolling = () => {
+    if (pollInterval) {
+      clearInterval(pollInterval);
+      pollInterval = null;
+    }
+  };
+
   try {
     // 1. Ensure Razorpay SDK script is loaded
     const resLoaded = await loadRazorpaySDK();
@@ -81,6 +91,8 @@ export const initiateRazorpayCheckout = async ({
       ? `Staff Top-Up: ${employeeSeats > 0 ? `${employeeSeats} Employee(s)` : ''} ${managerSeats > 0 ? `${managerSeats} Manager(s)` : ''} (${companyName})`
       : `${plan.toUpperCase()} Plan Subscription (${billingCycle.toUpperCase()} - ${billingCycle === 'yearly' ? '5% OFF' : 'Standard'})`;
 
+    let rzpInstance = null;
+
     // 3. Configure Razorpay Popup Options
     const options = {
       key: razorpayKey,
@@ -91,6 +103,10 @@ export const initiateRazorpayCheckout = async ({
       image: '/images/superCompanyLOGO.png',
       order_id: orderId,
       handler: async function (paymentResponse) {
+        if (paymentResolved) return;
+        paymentResolved = true;
+        stopPolling();
+
         try {
           // 4. Verify Payment Signature on Backend Server
           const verifyRes = await axios.post(
@@ -140,11 +156,17 @@ export const initiateRazorpayCheckout = async ({
       modal: {
         ondismiss: function () {
           console.log('Payment checkout popup closed by user');
+          // Allow background polling to continue for 20 more seconds in case user finished UPI on mobile phone right as modal was dismissed
+          setTimeout(() => {
+            if (!paymentResolved) stopPolling();
+          }, 20000);
         },
       },
     };
 
     const rzp = new window.Razorpay(options);
+    rzpInstance = rzp;
+
     rzp.on('payment.failed', async function (paymentFailResponse) {
       console.error('Payment Failed:', paymentFailResponse.error);
       const desc = paymentFailResponse.error?.description || '';
@@ -159,6 +181,7 @@ export const initiateRazorpayCheckout = async ({
       }
 
       if (desc.toLowerCase().includes('website does not match registered')) {
+        stopPolling();
         alert(
           '⚠️ Razorpay Live Security Notice:\n\n' +
           'Payment was blocked because this website domain (' + window.location.hostname + ') is not registered in your Razorpay Dashboard.\n\n' +
@@ -168,14 +191,48 @@ export const initiateRazorpayCheckout = async ({
           '3. Add "' + window.location.origin + '" to your registered websites.\n\n' +
           'Note: You can also use the "Instant Activate & Verify" button in your Billing dashboard to activate your plan immediately!'
         );
+        onFailure(paymentFailResponse.error);
       } else {
-        alert(`Payment Failed: ${desc || 'Payment could not be completed'}`);
+        // Don't stop polling immediately if it was just an interaction glitch, but report failure
+        onFailure(paymentFailResponse.error);
       }
-      onFailure(paymentFailResponse.error);
     });
 
     rzp.open();
+
+    // ⚡ Real-Time Phone/UPI Background Poller:
+    // If the user approves payment via UPI/QR on their phone, the desktop modal might not get the browser callback.
+    // We poll `/payment/sync-order` every 2.5s for up to 3 minutes to auto-detect and capture the payment!
+    pollInterval = setInterval(async () => {
+      if (paymentResolved) {
+        stopPolling();
+        return;
+      }
+      try {
+        const syncRes = await axios.post(
+          `${API_BASE}/payment/sync-order`,
+          { orderId },
+          { headers }
+        );
+        if (syncRes.data && syncRes.data.success && (syncRes.data.status === 'paid' || syncRes.data.payment?.status === 'paid')) {
+          paymentResolved = true;
+          stopPolling();
+          try {
+            if (rzpInstance && typeof rzpInstance.close === 'function') {
+              rzpInstance.close();
+            }
+          } catch (e) {}
+          onSuccess(syncRes.data);
+        }
+      } catch (e) {
+        // Silently continue polling
+      }
+    }, 2500);
+
+    // Safety timeout: stop polling after 3.5 minutes
+    setTimeout(stopPolling, 210000);
   } catch (err) {
+    stopPolling();
     console.error('🔥 Razorpay Checkout Error:', err);
     alert('Failed to launch Razorpay Checkout: ' + (err.response?.data?.message || err.message));
     onFailure(err);
