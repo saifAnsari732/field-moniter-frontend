@@ -353,21 +353,33 @@ export default function AdminEmployees() {
   const handleToggleBlock = async (emp) => {
     try {
       setBlockingId(emp._id);
-      const res = await API.put(`/employees/${emp._id}/block`);
+      let res;
+      try {
+        res = await API.put(`/employees/${emp._id}/block`);
+      } catch (firstErr) {
+        if (firstErr.response?.status === 404) {
+          res = await API.put(`/admin/employees/${emp._id}/block`);
+        } else {
+          throw firstErr;
+        }
+      }
+
       if (res.data?.success) {
-        toast.success(res.data.message);
+        const isBlocked = res.data.isBlocked;
+        const isActive = res.data.isActive !== undefined ? res.data.isActive : !isBlocked;
+        toast.success(res.data.message || (isBlocked ? 'Employee blocked successfully' : 'Employee unblocked successfully'));
         setEmployees((prev) =>
           prev.map((e) =>
             e._id === emp._id
-              ? { ...e, isBlocked: res.data.isBlocked, isActive: res.data.isActive }
+              ? { ...e, isBlocked, isActive }
               : e
           )
         );
         if (selectedEmp && selectedEmp._id === emp._id) {
           setSelectedEmp((prev) => ({
             ...prev,
-            isBlocked: res.data.isBlocked,
-            isActive: res.data.isActive,
+            isBlocked,
+            isActive,
           }));
         }
       }
