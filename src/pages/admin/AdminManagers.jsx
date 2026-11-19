@@ -26,6 +26,7 @@ import {
   Loader2,
   User,
   ShieldCheck,
+  ShieldAlert,
   CreditCard,
   Edit3,
 } from 'lucide-react';
@@ -110,6 +111,50 @@ export default function AdminManagers() {
     salary: 25000,
   });
   const [updatingMgr, setUpdatingMgr] = useState(false);
+  const [blockingId, setBlockingId] = useState(null);
+
+  const handleToggleBlockManager = async (mgr) => {
+    if (!mgr?._id) return;
+    try {
+      setBlockingId(mgr._id);
+      let res;
+      try {
+        res = await API.put(`/admin/managers/${mgr._id}/block`);
+      } catch (firstErr) {
+        try {
+          res = await API.put(`/employees/${mgr._id}/block`);
+        } catch (secondErr) {
+          res = await API.put(`/admin/employees/${mgr._id}/block`);
+        }
+      }
+
+      if (res.data?.success) {
+        const isBlocked = res.data.isBlocked;
+        const isActive = res.data.isActive !== undefined ? res.data.isActive : !isBlocked;
+        toast.success(res.data.message || (isBlocked ? 'Manager blocked successfully' : 'Manager unblocked successfully'));
+
+        setManagers((prev) =>
+          prev.map((m) =>
+            m._id === mgr._id
+              ? { ...m, isBlocked, isActive }
+              : m
+          )
+        );
+
+        if (selectedManager && selectedManager._id === mgr._id) {
+          setSelectedManager((prev) => ({
+            ...prev,
+            isBlocked,
+            isActive,
+          }));
+        }
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to update manager block status');
+    } finally {
+      setBlockingId(null);
+    }
+  };
 
   // New Manager Form State
   const [formData, setFormData] = useState({
@@ -483,9 +528,19 @@ export default function AdminManagers() {
                         </td>
 
                         <td className="py-3 px-4">
-                          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Active
-                          </span>
+                          {mgr.isBlocked ? (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full font-bold text-[11px] bg-rose-50 text-rose-700 border border-rose-300">
+                              <span className="w-1.5 h-1.5 rounded-full bg-rose-600"></span> Blocked
+                            </span>
+                          ) : mgr.isActive === false ? (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full font-semibold text-[11px] bg-slate-100 text-slate-600 border border-slate-200">
+                              <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span> Inactive
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full font-semibold text-[11px] bg-emerald-50 text-emerald-700 border border-emerald-200">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Active
+                            </span>
+                          )}
                         </td>
 
                         <td className="py-3 px-4 text-right">
@@ -495,7 +550,7 @@ export default function AdminManagers() {
                                 e.stopPropagation();
                                 setSelectedManager(mgr);
                               }}
-                              className="px-2.5 py-1 text-xs font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg"
+                              className="px-2.5 py-1 text-xs font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg cursor-pointer transition"
                             >
                               View
                             </button>
@@ -504,9 +559,30 @@ export default function AdminManagers() {
                                 e.stopPropagation();
                                 handleOpenEditMgrModal(mgr);
                               }}
-                              className="px-2 py-1 text-xs font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg"
+                              className="px-2 py-1 text-xs font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg cursor-pointer transition"
                             >
                               Edit
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleToggleBlockManager(mgr);
+                              }}
+                              disabled={blockingId === mgr._id}
+                              title={mgr.isBlocked ? 'Unblock Manager Account' : 'Block Manager Account'}
+                              className={`p-1.5 text-xs rounded-lg border transition cursor-pointer ${
+                                mgr.isBlocked
+                                  ? 'text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border-emerald-200'
+                                  : 'text-slate-600 bg-slate-50 hover:bg-slate-100 border-slate-200'
+                              }`}
+                            >
+                              {blockingId === mgr._id ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              ) : mgr.isBlocked ? (
+                                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                              ) : (
+                                <ShieldAlert className="w-3.5 h-3.5 text-slate-500 hover:text-rose-600" />
+                              )}
                             </button>
                           </div>
                         </td>
@@ -529,12 +605,35 @@ export default function AdminManagers() {
             <div className="lg:col-span-5 bg-white rounded-2xl border border-slate-200 shadow-xs p-5 space-y-6">
               <div className="border-b pb-4 flex items-center justify-between">
                 <h3 className="text-sm font-bold text-slate-900">Manager Details</h3>
-                <button
-                  onClick={() => handleOpenEditMgrModal(currentManager)}
-                  className="px-2.5 py-1 text-xs font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-xl flex items-center gap-1 transition"
-                >
-                  <Edit3 className="w-3.5 h-3.5" /> Edit Profile
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handleToggleBlockManager(currentManager)}
+                    disabled={blockingId === currentManager._id}
+                    className={`px-2.5 py-1 text-xs font-bold rounded-xl flex items-center gap-1 transition cursor-pointer border ${
+                      currentManager.isBlocked
+                        ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-300'
+                        : 'bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-200'
+                    }`}
+                  >
+                    {blockingId === currentManager._id ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : currentManager.isBlocked ? (
+                      <>
+                        <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" /> Unblock
+                      </>
+                    ) : (
+                      <>
+                        <ShieldAlert className="w-3.5 h-3.5 text-rose-600" /> Block
+                      </>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => handleOpenEditMgrModal(currentManager)}
+                    className="px-2.5 py-1 text-xs font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-xl flex items-center gap-1 transition cursor-pointer"
+                  >
+                    <Edit3 className="w-3.5 h-3.5" /> Edit Profile
+                  </button>
+                </div>
               </div>
 
               <div className="flex items-center gap-4">
@@ -553,6 +652,15 @@ export default function AdminManagers() {
                     <span className="text-[10px] font-semibold text-purple-700 bg-purple-50 border border-purple-200 px-2 py-0.5 rounded-full">
                       {currentManager.department || 'Field Services'}
                     </span>
+                    {currentManager.isBlocked ? (
+                      <span className="text-[10px] font-bold text-rose-700 bg-rose-50 border border-rose-300 px-2 py-0.5 rounded-full">
+                        Blocked
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                        Active
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
