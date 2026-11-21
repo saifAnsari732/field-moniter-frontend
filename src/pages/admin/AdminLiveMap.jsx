@@ -1360,10 +1360,10 @@ export default function AdminLiveMap() {
                     <div className="bg-[var(--bg-main)]/70 rounded-2xl p-3 border border-[var(--border-color)] space-y-2">
                       <div className="flex items-center justify-between">
                         <p className="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-wider flex items-center gap-1.5">
-                          <Clock className="w-3.5 h-3.5 text-amber-500" /> Route Halts (${selectedStoppages.length} stops)
+                          <Clock className="w-3.5 h-3.5 text-amber-500" /> Route Halts ({selectedStoppages.length} stops)
                         </p>
                         <span className="text-[9px] font-bold text-amber-600 bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/20">
-                          Total: ${formatDurationMinutes(selectedStoppages.reduce((acc, s) => acc + s.durationMinutes, 0))}
+                          Total: {formatDurationMinutes(selectedStoppages.reduce((acc, s) => acc + s.durationMinutes, 0))}
                         </span>
                       </div>
                       <div className="space-y-1.5 max-h-36 overflow-y-auto custom-scrollbar pr-1">
