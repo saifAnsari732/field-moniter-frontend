@@ -29,6 +29,8 @@ import {
   ShieldAlert,
   CreditCard,
   Edit3,
+  Compass,
+  Car,
 } from 'lucide-react';
 import { API, adminAPI } from '../../services/api.service';
 import toast from 'react-hot-toast';
@@ -109,6 +111,7 @@ export default function AdminManagers() {
     designation: 'Area Manager',
     password: '',
     salary: 25000,
+    TA: 2.5,
   });
   const [updatingMgr, setUpdatingMgr] = useState(false);
   const [blockingId, setBlockingId] = useState(null);
@@ -165,6 +168,7 @@ export default function AdminManagers() {
     designation: 'Area Manager',
     password: '',
     salary: 25000,
+    TA: 2.5,
   });
 
   const handleOpenEditMgrModal = (mgr) => {
@@ -176,7 +180,8 @@ export default function AdminManagers() {
       department: mgr.department || 'Field Services',
       designation: mgr.designation || 'Area Manager',
       password: '',
-      salary: mgr.salary || 25000,
+      salary: mgr.salary !== undefined && mgr.salary !== null ? Number(mgr.salary) : 25000,
+      TA: mgr.TA !== undefined && mgr.TA !== null ? Number(mgr.TA) : 2.5,
       emergencyContact: {
         name: mgr.emergencyContact?.name || '',
         phone: mgr.emergencyContact?.phone || '',
@@ -300,6 +305,7 @@ export default function AdminManagers() {
           designation: 'Area Manager',
           password: '',
           salary: 25000,
+          TA: 2.5,
         });
         fetchManagersData();
       }
@@ -676,6 +682,17 @@ export default function AdminManagers() {
                 </div>
               </div>
 
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="p-2.5 bg-blue-50/70 rounded-xl border border-blue-100 flex flex-col gap-0.5">
+                  <span className="text-[10px] uppercase font-bold text-blue-600 tracking-wider">Monthly Salary</span>
+                  <span className="font-bold text-slate-800 text-sm">₹{Number(currentManager.salary || 25000).toLocaleString('en-IN')}</span>
+                </div>
+                <div className="p-2.5 bg-amber-50/70 rounded-xl border border-amber-100 flex flex-col gap-0.5">
+                  <span className="text-[10px] uppercase font-bold text-amber-600 tracking-wider">TA Allowance</span>
+                  <span className="font-bold text-amber-800 text-sm">₹{currentManager.TA !== undefined && currentManager.TA !== null ? currentManager.TA : 2.5} / km</span>
+                </div>
+              </div>
+
               {/* Team Members List */}
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
@@ -824,7 +841,7 @@ export default function AdminManagers() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
                     <label className="block font-bold text-slate-700 mb-1">Login Password</label>
                     <div className="relative">
@@ -847,7 +864,22 @@ export default function AdminManagers() {
                         type="number"
                         placeholder="25000"
                         value={formData.salary}
-                        onChange={(e) => setFormData({ ...formData, salary: e.target.value })}
+                        onChange={(e) => setFormData({ ...formData, salary: Number(e.target.value) })}
+                        className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">TA (₹/km)</label>
+                    <div className="relative">
+                      <Compass className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                      <input
+                        type="number"
+                        step="0.1"
+                        placeholder="2.5"
+                        value={formData.TA}
+                        onChange={(e) => setFormData({ ...formData, TA: Number(e.target.value) })}
                         className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
                     </div>
@@ -1031,14 +1063,14 @@ export default function AdminManagers() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <div>
-                      <label className="block font-bold text-slate-700 mb-1">New Password (blank = no change)</label>
+                      <label className="block font-bold text-slate-700 mb-1">New Password</label>
                       <div className="relative">
                         <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
                         <input
                           type="password"
-                          placeholder="••••••••"
+                          placeholder="blank = no change"
                           value={editMgrData.password}
                           onChange={(e) => setEditMgrData({ ...editMgrData, password: e.target.value })}
                           className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -1054,6 +1086,21 @@ export default function AdminManagers() {
                           type="number"
                           value={editMgrData.salary}
                           onChange={(e) => setEditMgrData({ ...editMgrData, salary: Number(e.target.value) })}
+                          className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">Travel Allowance (₹/km)</label>
+                      <div className="relative">
+                        <Compass className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                        <input
+                          type="number"
+                          step="0.1"
+                          placeholder="2.5"
+                          value={editMgrData.TA}
+                          onChange={(e) => setEditMgrData({ ...editMgrData, TA: Number(e.target.value) })}
                           className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
                       </div>

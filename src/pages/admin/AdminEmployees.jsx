@@ -154,6 +154,7 @@ export default function AdminEmployees() {
     password: '',
     salary: 15000,
     TA: 2.5,
+    DA: 0,
   });
 
   const handleBulkAssignManager = async () => {
@@ -321,6 +322,7 @@ export default function AdminEmployees() {
           password: '',
           salary: 15000,
           TA: 2.5,
+          DA: 0,
         });
         fetchEmployeesData();
       }
@@ -973,6 +975,40 @@ export default function AdminEmployees() {
                         <option key={m._id} value={m._id}>{m.name} ({m.department})</option>
                       ))}
                     </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">Monthly Salary (₹)</label>
+                    <input
+                      type="number"
+                      placeholder="15000"
+                      value={formData.salary}
+                      onChange={(e) => setFormData({ ...formData, salary: Number(e.target.value) })}
+                      className="w-full p-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">TA (₹/km)</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      placeholder="2.5"
+                      value={formData.TA}
+                      onChange={(e) => setFormData({ ...formData, TA: Number(e.target.value) })}
+                      className="w-full p-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">DA (₹)</label>
+                    <input
+                      type="number"
+                      placeholder="0"
+                      value={formData.DA || 0}
+                      onChange={(e) => setFormData({ ...formData, DA: Number(e.target.value) })}
+                      className="w-full p-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500"
+                    />
                   </div>
                 </div>
 
